@@ -1,7 +1,7 @@
 //! Factorization methods for multivariate polynomials
 //! that implement [Factorize].
 
-use std::{cmp::Reverse, sync::Arc};
+use std::{borrow::Cow, cmp::Reverse, sync::Arc};
 
 use ahash::{HashMap, HashSet, HashSetExt};
 use rand::{Rng, rng};
@@ -44,7 +44,7 @@ impl<F: EuclideanDomain + PolynomialGCD<E>, E: PositiveExponent>
 
         let mut factors = vec![];
         for x in 0..self.nvars() {
-            if self.degree(x) == E::zero() {
+            if stripped.degree(x) == E::zero() {
                 continue;
             }
 
@@ -481,7 +481,7 @@ impl<R: EuclideanDomain, E: PositiveExponent> MultivariatePolynomial<R, E, LexOr
                         * &self
                             .monomial(t.coefficient.clone(), t.exponents[..self.nvars()].to_vec()));
             }
-            factors.push(new_factor);
+            factors.push(new_factor.make_primitive());
         }
 
         Some(factors)
@@ -3032,7 +3032,7 @@ impl<E: PositiveExponent> MultivariatePolynomial<IntegerRing, E, LexOrder> {
         bound: Integer,
         p: u32,
         k: usize,
-    ) -> Result<(Vec<Self>, Vec<Self>), usize> {
+    ) -> Result<(Integer, Vec<Self>, Vec<Self>), usize> {
         let lcoeff = self.univariate_lcoeff(order[0]);
         let sqf = lcoeff.square_free_factorization();
 
@@ -3047,7 +3047,7 @@ impl<E: PositiveExponent> MultivariatePolynomial<IntegerRing, E, LexOrder> {
 
         let mut lcoeff_left = lcoeff.clone();
 
-        let main_bivariate_factors: Vec<_> =
+        let mut main_bivariate_factors: Vec<_> =
             sorted_main_factors.into_iter().map(|(f, _, _)| f).collect();
 
         // TODO: smarter ordering
@@ -3200,7 +3200,7 @@ impl<E: PositiveExponent> MultivariatePolynomial<IntegerRing, E, LexOrder> {
         }
 
         // rescale the leading coefficient factors to recover the missing content and sign
-        for (f, b) in true_lcoeffs.iter_mut().zip(&main_bivariate_factors) {
+        for (f, b) in true_lcoeffs.iter_mut().zip(&mut main_bivariate_factors) {
             let mut b_eval = b.clone();
             for (v, p) in sample_points {
                 b_eval = b_eval.replace(*v, p);
@@ -3214,23 +3214,22 @@ impl<E: PositiveExponent> MultivariatePolynomial<IntegerRing, E, LexOrder> {
             }
             let f_lc = f_eval.lcoeff();
 
-            let (q, r) = Z.quot_rem(&b_lc, &f_lc);
-            assert!(
-                r.is_zero(),
-                "Problem with bivariate factor scaling in factorization of {self}: order={order:?}, samples={sample_points:?}"
-            );
+            let lcm = b_lc.lcm(&f_lc);
 
-            lcoeff_left = lcoeff_left.div_coeff(&q);
-            *f = f.clone().mul_coeff(q);
+            let b_cor = &lcm / &b_lc;
+            let f_cor = lcm / &f_lc;
+
+            *b = b.clone().mul_coeff(b_cor);
+
+            lcoeff_left = lcoeff_left.div_coeff(&f_cor);
+            *f = f.clone().mul_coeff(f_cor);
         }
 
-        if !lcoeff_left.is_one() {
-            panic!(
-                "Could not distribute content of {self}: order={order:?}, samples={sample_points:?} Rest = {lcoeff_left}"
-            );
-        }
-
-        Ok((main_bivariate_factors, true_lcoeffs))
+        Ok((
+            lcoeff_left.get_constant(),
+            main_bivariate_factors,
+            true_lcoeffs,
+        ))
     }
 
     fn multivariate_hensel_lift_with_auto_lcoeff_fixing(
@@ -3326,7 +3325,7 @@ impl<E: PositiveExponent> MultivariatePolynomial<IntegerRing, E, LexOrder> {
         &self,
         order: &mut [usize],
         mut coefficient_upper_bound: i64,
-        max_factors_num: Option<usize>,
+        mut max_factors_num: Option<usize>,
     ) -> (Vec<Self>, Vec<(usize, Integer)>, i64, Self) {
         debug!("Find sample for {} with order {:?}", self, order);
 
@@ -3338,10 +3337,11 @@ impl<E: PositiveExponent> MultivariatePolynomial<IntegerRing, E, LexOrder> {
         let mut rng = rng();
         let degree = self.degree(order[0]);
         let mut bivariate_factors: Vec<_>;
+        let mut best: Option<(Integer, _, _, _, _)> = None;
 
         let uni_lcoeff = self.univariate_lcoeff(order[0]);
 
-        let mut content_fail_count = 0;
+        let mut content_try_count = 0;
         'new_sample: loop {
             for s in &mut cur_sample_points {
                 s.1 = Integer::Single(rng.random_range(0..=coefficient_upper_bound));
@@ -3378,12 +3378,14 @@ impl<E: PositiveExponent> MultivariatePolynomial<IntegerRing, E, LexOrder> {
                 && cur_biv_f.gcd(&biv_df).is_constant()
                 && cur_uni_f.gcd(&uni_df).is_constant()
             {
-                if !cur_biv_f.univariate_content(order[0]).is_constant() {
-                    content_fail_count += 1;
+                let c = cur_biv_f.univariate_content(order[0]);
+
+                if !c.is_constant() {
+                    content_try_count += 1;
                     coefficient_upper_bound += 10;
 
                     debug!("Univariate content is not constant");
-                    if content_fail_count == 4 {
+                    if content_try_count == 10 {
                         // it is likely that we will always find content for this variable ordering, so change the
                         // second variable
                         // TODO: is this guaranteed to work or should we also change the first variable?
@@ -3396,42 +3398,58 @@ impl<E: PositiveExponent> MultivariatePolynomial<IntegerRing, E, LexOrder> {
                         }
 
                         debug!("Changed the second variable to {}", order[1]);
-                        content_fail_count = 0;
+                        content_try_count = 0;
                     }
 
                     continue;
                 }
 
                 bivariate_factors = cur_biv_f.factor().into_iter().map(|f| f.0).collect();
+                bivariate_factors.retain(|f| !f.is_constant());
 
-                // absorb unit in another factor
-                let mut has_minus = 0;
-                bivariate_factors.retain(|f| {
-                    if f.is_constant() && f.lcoeff() == -1 {
-                        has_minus += 1;
-                        false
-                    } else {
-                        true
+                if max_factors_num.is_none() {
+                    max_factors_num = Some(bivariate_factors.len());
+                }
+
+                if bivariate_factors.len() <= max_factors_num.unwrap() {
+                    if bivariate_factors.len() < max_factors_num.unwrap() {
+                        max_factors_num = Some(bivariate_factors.len());
+                        content_try_count = 0;
+                        best = None;
                     }
-                });
 
-                if has_minus % 2 == 1 {
-                    bivariate_factors[0] = -bivariate_factors[0].clone();
-                }
+                    if best.is_none() || c.get_constant().abs() < best.as_ref().unwrap().0 {
+                        best = Some((
+                            c.get_constant().abs(),
+                            bivariate_factors.clone(),
+                            cur_sample_points.clone(),
+                            coefficient_upper_bound.clone(),
+                            cur_uni_f.clone(),
+                        ));
+                    }
 
-                if bivariate_factors.len() <= max_factors_num.unwrap_or(bivariate_factors.len()) {
-                    break;
+                    content_try_count += 1;
+
+                    // try a few times to lower the chance of a costly Hensel lift
+                    // with a wrong number of factors
+                    if content_try_count > 2 {
+                        break;
+                    }
+                } else {
+                    debug!(
+                        "Number of factors is too large: {} vs {}",
+                        bivariate_factors.len(),
+                        max_factors_num.unwrap_or(bivariate_factors.len())
+                    );
                 }
-                debug!(
-                    "Number of factors is too large: {} vs {}",
-                    bivariate_factors.len(),
-                    max_factors_num.unwrap_or(bivariate_factors.len())
-                );
             }
 
             coefficient_upper_bound += 10;
             debug!("Growing bound {}", coefficient_upper_bound);
         }
+
+        let (_, bivariate_factors, cur_sample_points, coefficient_upper_bound, cur_uni_f) =
+            best.unwrap();
 
         (
             bivariate_factors,
@@ -3499,10 +3517,6 @@ impl<E: PositiveExponent> MultivariatePolynomial<IntegerRing, E, LexOrder> {
             );
         }
 
-        for (v, s) in &sample_points {
-            debug!("Sample point x{} = {}", v, s);
-        }
-
         // select a suitable prime
         // we start small as we do not want to overshoot the coefficient bound too much
         // however, the sparse lifting algorithm requires divisions, which means we
@@ -3540,7 +3554,7 @@ impl<E: PositiveExponent> MultivariatePolynomial<IntegerRing, E, LexOrder> {
             break;
         }
 
-        // TODO: modify bound by taking the shifts into account?
+        // TODO: modify bound by taking the shifts and content of bivariate polynomials into account?
         let bound = self.coefficient_bound();
 
         let p_int = field.get_prime().to_integer();
@@ -3551,15 +3565,18 @@ impl<E: PositiveExponent> MultivariatePolynomial<IntegerRing, E, LexOrder> {
             k += 1;
         }
 
-        let (sorted_biv_factors, true_lcoeffs) = match self.lcoeff_precomputation(
-            &bivariate_factors,
-            &sample_points,
-            order,
-            max_p.clone(),
-            p as u32,
-            k,
-        ) {
-            Ok((sorted_biv_factors, true_lcoeffs)) => (sorted_biv_factors, true_lcoeffs),
+        let (leftover_lc, mut sorted_biv_factors, mut true_lcoeffs) = match self
+            .lcoeff_precomputation(
+                &bivariate_factors,
+                &sample_points,
+                order,
+                max_p.clone(),
+                p as u32,
+                k,
+            ) {
+            Ok((leftover_lc, sorted_biv_factors, true_lcoeffs)) => {
+                (leftover_lc, sorted_biv_factors, true_lcoeffs)
+            }
             Err(max_biv) => {
                 // the leading coefficient computation failed because the bivariate factorization was wrong
                 // try again with other sample points and a better bound
@@ -3571,17 +3588,42 @@ impl<E: PositiveExponent> MultivariatePolynomial<IntegerRing, E, LexOrder> {
             }
         };
 
+        // rescale all bivariate images with the leftover content, as its distribution is unknown
+        let rescaled = if leftover_lc != 1 {
+            for (b, l) in sorted_biv_factors.iter_mut().zip(&mut true_lcoeffs) {
+                *b = b.clone().mul_coeff(leftover_lc.clone());
+                *l = l.clone().mul_coeff(leftover_lc.clone());
+            }
+
+            Cow::Owned(
+                self.clone()
+                    .mul_coeff(leftover_lc.clone().pow(sorted_biv_factors.len() as u64 - 1)),
+            )
+        } else {
+            Cow::Borrowed(self)
+        };
+
         for (b, l) in sorted_biv_factors.iter().zip(&true_lcoeffs) {
             debug!("Bivariate factor {} with true lcoeff {}", b, l);
         }
 
-        if let Some(factorization) = self.sparse_lifting(&sorted_biv_factors, &true_lcoeffs, order)
+        if let Some(mut factorization) =
+            rescaled.sparse_lifting(&sorted_biv_factors, &true_lcoeffs, order)
         {
             // test the factorization
             let mut test = self.one();
             for f in &factorization {
-                debug!("Factor = {}", f);
                 test = &test * f;
+            }
+
+            if self.lcoeff().is_negative() != test.lcoeff().is_negative() {
+                test = -test;
+                if let Some(neg_coeff) = factorization.iter_mut().find(|f| f.lcoeff().is_negative())
+                {
+                    *neg_coeff = -neg_coeff.clone();
+                } else {
+                    factorization[0] = factorization[0].clone().mul_coeff((-1).into());
+                }
             }
 
             if &test == self {
@@ -3604,7 +3646,7 @@ impl<E: PositiveExponent> MultivariatePolynomial<IntegerRing, E, LexOrder> {
         );
 
         // perform the Hensel lifting in a performance-optimized finite field if possible
-        let factorization = if max_p < u64::MAX {
+        let mut factorization: Vec<MultivariatePolynomial<IntegerRing, E>> = if max_p < u64::MAX {
             let prime = match max_p {
                 Integer::Single(b) => b as u64,
                 Integer::Double(b) => b as u64,
@@ -3612,7 +3654,7 @@ impl<E: PositiveExponent> MultivariatePolynomial<IntegerRing, E, LexOrder> {
             };
             let small_field_mod = Zp64::new(prime);
 
-            let poly_ff = self.map_coeff(
+            let poly_ff = rescaled.map_coeff(
                 |c| c.to_finite_field(&small_field_mod),
                 small_field_mod.clone(),
             );
@@ -3674,12 +3716,16 @@ impl<E: PositiveExponent> MultivariatePolynomial<IntegerRing, E, LexOrder> {
 
             factorization_ff
                 .into_iter()
-                .map(|f| f.map_coeff(|c| small_field_mod.to_symmetric_integer(c), Z))
+                .map(|f| {
+                    f.map_coeff(|c| small_field_mod.to_symmetric_integer(c), Z)
+                        .make_primitive()
+                })
                 .collect()
         } else {
             let field_mod = FiniteField::<Integer>::new(max_p.clone());
 
-            let poly_ff = self.map_coeff(|c| field_mod.to_element(c.clone()), field_mod.clone());
+            let poly_ff =
+                rescaled.map_coeff(|c| field_mod.to_element(c.clone()), field_mod.clone());
 
             let true_lcoeffs_ff: Vec<_> = true_lcoeffs
                 .into_iter()
@@ -3698,7 +3744,10 @@ impl<E: PositiveExponent> MultivariatePolynomial<IntegerRing, E, LexOrder> {
 
             factorization_ff
                 .into_iter()
-                .map(|f| f.map_coeff(|c| field_mod.to_symmetric_integer(c), Z))
+                .map(|f| {
+                    f.map_coeff(|c| field_mod.to_symmetric_integer(c), Z)
+                        .make_primitive()
+                })
                 .collect()
         };
 
@@ -3707,6 +3756,15 @@ impl<E: PositiveExponent> MultivariatePolynomial<IntegerRing, E, LexOrder> {
         for f in &factorization {
             debug!("Factor = {}", f);
             test = &test * f;
+        }
+
+        if self.lcoeff().is_negative() != test.lcoeff().is_negative() {
+            test = -test;
+            if let Some(neg_coeff) = factorization.iter_mut().find(|f| f.lcoeff().is_negative()) {
+                *neg_coeff = -neg_coeff.clone();
+            } else {
+                factorization[0] = factorization[0].clone().mul_coeff((-1).into());
+            }
         }
 
         if &test == self {

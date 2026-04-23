@@ -2038,15 +2038,9 @@ impl<E: PositiveExponent> MultivariatePolynomial<IntegerRing, E> {
                 return n.constant(gcd);
             }
 
-            // take the smallest element
-            let index_smallest = f
-                .iter()
-                .enumerate()
-                .min_by_key(|(_, v)| v.nterms())
-                .unwrap()
-                .0;
+            f.sort_unstable_by(|a, b| b.nterms().cmp(&a.nterms())); // sort in decreasing order
 
-            let a = f.swap_remove(index_smallest);
+            let a = f.pop().unwrap();
 
             // add all other polynomials
             let term_bound = f.iter().map(|x| x.nterms()).sum();
@@ -2060,7 +2054,8 @@ impl<E: PositiveExponent> MultivariatePolynomial<IntegerRing, E> {
                 SMALL_PRIMES.len()
             };
 
-            for p in f.iter() {
+            // try the 20 smallest chunks
+            for p in f.iter().rev().take(20) {
                 let k = Integer::Single(SMALL_PRIMES[prime_index % num_primes]);
                 prime_index += 1;
                 b = b + p.clone().mul_coeff(k);
@@ -2697,10 +2692,26 @@ impl<E: PositiveExponent> MultivariatePolynomial<IntegerRing, E> {
                     break;
                 }
 
+                if !missing_terms
+                    && coeffs
+                        .iter()
+                        .enumerate()
+                        .any(|(i, c)| !c.iter().all(|x| p.is_zero(x)) && sigma[i].is_empty())
+                {
+                    debug!("Detected new coefficient row, recomputing support");
+                    missing_terms = true;
+                    delta += 1;
+                    continue 'new_image;
+                }
+
                 // solve system to find coefficients
                 let mut h_p = kr_a_p.zero();
                 for i in 0..=d_0.to_u32() {
-                    if coeffs[i as usize].iter().all(|x| p.is_zero(x)) {
+                    if missing_terms && coeffs[i as usize].iter().all(|x| p.is_zero(x)) {
+                        continue;
+                    }
+
+                    if !missing_terms && sigma[i as usize].is_empty() {
                         continue;
                     }
 
@@ -2785,6 +2796,10 @@ impl<E: PositiveExponent> MultivariatePolynomial<IntegerRing, E> {
             "Hu-Monagan gcd of {} and {} with bounds {:?}",
             self, b, bounds
         );
+        assert!(
+            self.nvars() > 2 && b.nvars() > 2,
+            "bivariate Hu-Monagan GCD requires at least three variables"
+        );
         assert!(bounds[0] > E::zero());
 
         let start_exp = 2;
@@ -2794,9 +2809,9 @@ impl<E: PositiveExponent> MultivariatePolynomial<IntegerRing, E> {
         let lc_a = self.bivariate_lcoeff();
         let lc_b = b.bivariate_lcoeff();
         let gamma = if lc_a.nterms() < lc_b.nterms() {
-            lc_a
-        } else {
             lc_b
+        } else {
+            lc_a
         };
 
         let largest_coeff = self
@@ -3167,20 +3182,40 @@ impl<E: PositiveExponent> MultivariatePolynomial<IntegerRing, E> {
                     break;
                 }
 
+                if !missing_terms && coeffs.keys().any(|e_x_y| !sigma.contains_key(e_x_y)) {
+                    debug!("Detected new bivariate coefficient row, recomputing support");
+                    missing_terms = true;
+                    delta += 1;
+                    continue 'new_image;
+                }
+
                 // solve system to find coefficients
                 let mut h_p = kr_a_p.zero();
-                for (e_x_y, l) in &coeffs {
+                let interpolation_rows: Vec<(u32, u32)> = if missing_terms {
+                    coeffs.keys().cloned().collect()
+                } else {
+                    sigma.keys().cloned().collect()
+                };
+
+                for e_x_y in interpolation_rows {
                     let mut row = vec![p.zero(); gs.len()];
-                    for pp in l {
-                        row[pp.0] = pp.1;
+                    if let Some(l) = coeffs.get(&e_x_y) {
+                        for pp in l {
+                            row[pp.0] = pp.1;
+                        }
                     }
 
-                    let monomials: Vec<_> = sigma[e_x_y].iter().cloned().collect();
+                    let monomials: Vec<_> = sigma[&e_x_y].iter().cloned().collect();
                     let mat = sample_points
                         .iter()
                         .map(|x| monomials.iter().map(|e| p.pow(x, *e)).collect())
                         .collect::<Vec<_>>();
 
+                    let missing_terms_check = if !missing_terms {
+                        Some(row[tau[&e_x_y]])
+                    } else {
+                        None
+                    };
                     let sol = gs[0].solve_vandermonde_matrix(mat, row);
 
                     let mut exp = vec![0; self.nvars()];
@@ -3192,19 +3227,13 @@ impl<E: PositiveExponent> MultivariatePolynomial<IntegerRing, E> {
                     }
 
                     if !missing_terms {
-                        let max = tau[e_x_y];
+                        let max = tau[&e_x_y];
                         let aa = h_p_e.replace(
                             start_exp,
                             &p.pow(&alpha, p.from_element(&s) as u64 + max as u64),
                         );
 
-                        if aa.get_constant()
-                            != coeffs[e_x_y]
-                                .iter()
-                                .find(|(i, _)| *i == max)
-                                .map(|(_, v)| *v)
-                                .unwrap_or(p.zero())
-                        {
+                        if aa.get_constant() != missing_terms_check.unwrap() {
                             debug!("Missing terms in h_p2 for {:?}: {}; {}", e_x_y, h_p_e, aa);
 
                             missing_terms = true;
