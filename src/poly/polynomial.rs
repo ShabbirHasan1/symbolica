@@ -2069,6 +2069,18 @@ impl<F: Ring, E: Exponent> MultivariatePolynomial<F, E, LexOrder> {
         lcoeff
     }
 
+    /// Get the bivariate degree of a multivariate polynomial viewed as a bivariate polynomial in the first two variables.
+    pub fn bivariate_deg(&self) -> (E, E) {
+        let d = self.degree(0);
+        let mut d1 = E::zero();
+        for t in self {
+            if t.exponents[0] == d && t.exponents[1] > d1 {
+                d1 = t.exponents[1];
+            }
+        }
+        (d, d1)
+    }
+
     /// Get the leading coefficient of a multivariate polynomial viewed as a bivariate polynomial in the first two variables.
     pub fn bivariate_lcoeff(&self) -> MultivariatePolynomial<F, E, LexOrder> {
         let mut lcoeff = self.zero();
@@ -2077,13 +2089,7 @@ impl<F: Ring, E: Exponent> MultivariatePolynomial<F, E, LexOrder> {
             return lcoeff;
         }
 
-        let d = self.degree(0);
-        let mut d1 = E::zero();
-        for t in self {
-            if t.exponents[0] == d && t.exponents[1] > d1 {
-                d1 = t.exponents[1];
-            }
-        }
+        let (d, d1) = self.bivariate_deg();
 
         let mut e = vec![E::zero(); self.nvars()];
         for t in self {

@@ -1348,6 +1348,13 @@ impl<R: EuclideanDomain + PolynomialGCD<E>, E: PositiveExponent> MultivariatePol
     }
 
     /// Get the content of a multivariate polynomial viewed as a
+    /// univariate polynomial in `x` and `y`.
+    pub fn bivariate_content(&self, x: usize, y: usize) -> MultivariatePolynomial<R, E> {
+        let af = self.to_multivariate_polynomial_list(&[x, y], true);
+        PolynomialGCD::gcd_multiple(af.into_values().collect())
+    }
+
+    /// Get the content of a multivariate polynomial viewed as a
     /// multivariate polynomial in all variables except `x`.
     pub fn multivariate_content(&self, x: usize) -> MultivariatePolynomial<R, E> {
         let af = self.to_multivariate_polynomial_list(&[x], false);
@@ -2826,14 +2833,24 @@ impl<E: PositiveExponent> MultivariatePolynomial<IntegerRing, E> {
 
         let start_exp = 2;
 
-        // TODO: make primitive in x0,x1?
+        let a_content = self.bivariate_content(0, 1);
+        let b_content = b.bivariate_content(0, 1);
+        if !a_content.is_one() || !b_content.is_one() {
+            let content = a_content.gcd(&b_content);
+            if content.is_constant() {
+                return content
+                    * &(self / &a_content).gcd_hu_monagan_bivariate(&(b / &b_content), bounds);
+            } else {
+                return content * &(self / &a_content).gcd(&(b / &b_content));
+            }
+        }
 
         let lc_a = self.bivariate_lcoeff();
         let lc_b = b.bivariate_lcoeff();
         let gamma = if lc_a.nterms() < lc_b.nterms() {
-            lc_b
-        } else {
             lc_a
+        } else {
+            lc_b
         };
 
         let largest_coeff = self
@@ -2855,7 +2872,7 @@ impl<E: PositiveExponent> MultivariatePolynomial<IntegerRing, E> {
             .collect();
 
         let mut delta = 1;
-        let mut d_0_1 = (bounds[0], bounds[1]);
+        let mut d_0_1 = (bounds[0].to_u32(), bounds[1].to_u32());
         let mut h = self.map_exp(|e| e.to_u32()).zero();
         let mut m = Integer::one(); // CRA new modulus
         let mut ms: Vec<u64> = vec![]; // CRA primes
@@ -2885,12 +2902,16 @@ impl<E: PositiveExponent> MultivariatePolynomial<IntegerRing, E> {
                 .map_exp(|e| e.to_u32())
                 .kronecker_map(&powers, start_exp);
 
-            for i in 0..start_exp {
-                if kr_a.degree(i) < self.degree(i).to_u32() || kr_b.degree(i) < b.degree(i).to_u32()
-                {
-                    debug!("Bad Kronecker image");
-                    continue 'kronecker_prime;
-                }
+            if kr_a.bivariate_deg()
+                < (
+                    self.bivariate_deg().0.to_u32(),
+                    self.bivariate_deg().1.to_u32(),
+                )
+                || kr_b.bivariate_deg()
+                    < (b.bivariate_deg().0.to_u32(), b.bivariate_deg().1.to_u32())
+            {
+                debug!("Bad Kronecker image");
+                continue 'kronecker_prime;
             }
 
             delta += 1;
@@ -2927,7 +2948,7 @@ impl<E: PositiveExponent> MultivariatePolynomial<IntegerRing, E> {
                         if kr_a_p.replace(start_exp, &beta).try_div(&h_b).is_none()
                             || kr_b_p.replace(start_exp, &beta).try_div(&h_b).is_none()
                         {
-                            println!("Bad Kronecker image for prime {}", p);
+                            debug!("Bad Kronecker image for prime {}", p);
 
                             m /= *p_i;
                             h = h.map_coeff(|c| c % *p_i, Z); // remove bad prime from h
@@ -2963,13 +2984,11 @@ impl<E: PositiveExponent> MultivariatePolynomial<IntegerRing, E> {
                     let kr_gamma_p =
                         kr_gamma.map_coeff(|c| c.to_finite_field(&field), field.clone());
 
-                    for i in 0..start_exp {
-                        if kr_a_p.degree(i) < kr_a.degree(i).to_u32()
-                            || kr_b_p.degree(i) < kr_b.degree(i).to_u32()
-                        {
-                            debug!("Bad prime {}", p);
-                            continue 'new_prime;
-                        }
+                    if kr_a_p.bivariate_deg() < kr_a.bivariate_deg()
+                        || kr_b_p.bivariate_deg() < kr_b.bivariate_deg()
+                    {
+                        debug!("Bad prime {}", p);
+                        continue 'new_prime;
                     }
 
                     let mut totient_primes = vec![];
@@ -3060,12 +3079,11 @@ impl<E: PositiveExponent> MultivariatePolynomial<IntegerRing, E> {
                         let a_j = eval(&p, &kr_a_p, &kr_ap_exponents_alpha, &mut kr_ap_exponents_s);
                         let b_j = eval(&p, &kr_b_p, &kr_bp_exponents_alpha, &mut kr_bp_exponents_s);
 
-                        for i in 0..start_exp {
-                            if a_j.degree(i) < kr_a_p.degree(i) || b_j.degree(i) < kr_b_p.degree(i)
-                            {
-                                debug!("Bad Kronecker image, trying new prime");
-                                continue 'kronecker_prime;
-                            }
+                        if a_j.bivariate_deg() < kr_a_p.bivariate_deg()
+                            || b_j.bivariate_deg() < kr_b_p.bivariate_deg()
+                        {
+                            debug!("Bad Kronecker image, trying new prime");
+                            continue 'kronecker_prime;
                         }
 
                         let kr_gamma_p_e = eval(
@@ -3075,37 +3093,28 @@ impl<E: PositiveExponent> MultivariatePolynomial<IntegerRing, E> {
                             &mut kr_gamma_p_exponents_s,
                         );
 
-                        let g = a_j.gcd(&b_j) * &kr_gamma_p_e; // FIXME: bad normalization?
+                        let g = a_j.gcd(&b_j) * &kr_gamma_p_e;
                         gs.push(g);
                         sample_points.push(sample_point);
                     }
 
-                    let d_min = gs[gs.len() - 2].degree(0).min(gs[gs.len() - 1].degree(0));
-                    let d_max = gs[gs.len() - 2].degree(0).max(gs[gs.len() - 1].degree(0));
-                    if d_min < d_0_1.0.to_u32() {
-                        debug!("Unlucky sample: dim x0 is {} vs {}", d_min, d_0_1.0);
-                        d_0_1.0 = E::from_u32(d_min);
-                        re_init = true;
-                        continue 'new_image;
-                    }
-                    if d_max > d_0_1.0.to_u32() {
-                        debug!("Bad Kronecker image, trying new prime");
-                        continue 'kronecker_prime;
-                    }
-
-                    let d_min = gs[gs.len() - 2].degree(1).min(gs[gs.len() - 1].degree(1));
-                    let d_max = gs[gs.len() - 2].degree(1).max(gs[gs.len() - 1].degree(1));
-                    if d_min < d_0_1.1.to_u32() {
-                        debug!("Unlucky sample: dim x1 is {} vs {}", d_min, d_0_1.1);
-                        d_0_1.1 = E::from_u32(d_min);
-                        re_init = true;
-                        continue 'new_image;
-                    }
-                    if d_max > d_0_1.1.to_u32() {
+                    let d_min = gs[gs.len() - 2]
+                        .bivariate_deg()
+                        .min(gs[gs.len() - 1].bivariate_deg());
+                    let d_max = gs[gs.len() - 2]
+                        .bivariate_deg()
+                        .max(gs[gs.len() - 1].bivariate_deg());
+                    if d_min < d_0_1 {
                         debug!(
-                            "Bad Kronecker image for var 1, trying new prime: {} vs {}",
-                            d_max, d_0_1.1
+                            "Unlucky sample: bivariate degree {:?} vs {:?}",
+                            d_min, d_0_1
                         );
+                        d_0_1 = d_min;
+                        re_init = true;
+                        continue 'new_image;
+                    }
+                    if d_max > d_0_1 {
+                        debug!("Bad Kronecker image, trying new prime");
                         continue 'kronecker_prime;
                     }
 
@@ -3299,7 +3308,7 @@ impl<E: PositiveExponent> MultivariatePolynomial<IntegerRing, E> {
                     .kronecker_inv_map(&powers, start_exp)
                     .map_exp(|e| E::from_u32(*e));
                 debug!("h_inv = {}", hm);
-                let content = hm.univariate_content(0); // TODO: bivariate content?
+                let content = hm.bivariate_content(0, 1);
                 let hc = hm / &content;
 
                 debug!("hc {}", hc);
