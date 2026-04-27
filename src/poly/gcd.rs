@@ -2818,7 +2818,7 @@ impl<E: PositiveExponent> MultivariatePolynomial<IntegerRing, E> {
     }
 
     /// Compute the gcd of two multivariate polynomials using Hu-Monagan's algorithm.
-    /// The polynomials must be primitive in the first variable, which must also be present.
+    /// The first two variables must be present.
     #[instrument(level = "debug", skip_all)]
     pub fn gcd_hu_monagan_bivariate(&self, b: &Self, bounds: &[E]) -> Self {
         debug!(
@@ -3417,12 +3417,38 @@ impl<E: PositiveExponent> PolynomialGCD<E> for IntegerRing {
         vars: &[usize],
         bounds: &mut [E],
     ) -> MultivariatePolynomial<Self, E> {
+        fn should_use_hu_monagan<E: PositiveExponent>(
+            a: &MultivariatePolynomial<IntegerRing, E>,
+            b: &MultivariatePolynomial<IntegerRing, E>,
+            vars: &[usize],
+            bounds: &[E],
+        ) -> bool {
+            if vars[0] != 0
+                || bounds[0] <= E::zero()
+                || bounds.iter().filter(|x| **x > E::zero()).count() <= 2
+                || bounds.get(1).is_none_or(|b| *b == E::zero())
+            {
+                return false;
+            }
+
+            let nterms = a.nterms() + b.nterms();
+            if bounds[1].to_u32() as usize > nterms / 64 {
+                return false;
+            }
+
+            let Some(box_size) = vars.iter().try_fold(1usize, |acc, &v| {
+                acc.checked_mul(a.degree(v).max(b.degree(v)).to_u32() as usize + 1)
+            }) else {
+                return true;
+            };
+
+            nterms * 20 < box_size
+        }
+
         if GLOBAL_SETTINGS
             .use_hu_monagan_poly_gcd
             .load(std::sync::atomic::Ordering::Relaxed)
-            && vars[0] == 0
-            && bounds[0] > E::zero()
-            && bounds.iter().filter(|x| **x > E::zero()).count() > 2
+            && should_use_hu_monagan(a, b, vars, bounds)
         {
             // TODO: choose better ordering
             return a.gcd_hu_monagan_bivariate(b, bounds);
