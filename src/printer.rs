@@ -2,6 +2,7 @@
 
 use std::{
     borrow::Cow,
+    cell::Cell,
     fmt::{self, Error, Write},
     io::IsTerminal,
     sync::LazyLock,
@@ -25,6 +26,30 @@ static SHOULD_COLORIZE: LazyLock<bool> = LazyLock::new(|| {
         .map(|v| v != "0")
         .unwrap_or_else(|_| std::io::stdout().is_terminal())
 });
+
+thread_local! {
+    static FORCE_COLORIZE: Cell<bool> = const { Cell::new(false) };
+}
+
+struct ForceColorizeGuard {
+    was_forced: bool,
+}
+
+impl Drop for ForceColorizeGuard {
+    fn drop(&mut self) {
+        FORCE_COLORIZE.with(|force| force.set(self.was_forced));
+    }
+}
+
+pub(crate) fn with_forced_ansi_color<T>(f: impl FnOnce() -> T) -> T {
+    let was_forced = FORCE_COLORIZE.with(|force| force.replace(true));
+    let _guard = ForceColorizeGuard { was_forced };
+    f()
+}
+
+fn should_write_ansi_color() -> bool {
+    FORCE_COLORIZE.with(|force| force.get()) || *SHOULD_COLORIZE
+}
 
 /// Wrap a printable object with ANSI escape codes for coloring and styling in terminal output.
 pub struct AnsiWrap<T> {
@@ -101,7 +126,7 @@ impl<T> AnsiWrap<T> {
 
     pub fn should_colorize_with_mode(color_mode: ColorMode) -> bool {
         match color_mode {
-            ColorMode::Auto => *SHOULD_COLORIZE,
+            ColorMode::Auto => should_write_ansi_color(),
             ColorMode::Always => true,
             ColorMode::Never => false,
         }
@@ -139,6 +164,159 @@ impl<T: fmt::Display> fmt::Display for AnsiWrap<T> {
         } else {
             write!(f, "{}", self.value)
         }
+    }
+}
+
+enum AnsiHtmlStyle {
+    Reset,
+    Open { mode: u8, color: u8 },
+}
+
+/// A wrapper around an ANSI escaped string that converts it to HTML color tags
+/// when displayed.
+pub struct AnsiHtmlFormatter<'a> {
+    formatted: &'a str,
+}
+
+impl<'a> AnsiHtmlFormatter<'a> {
+    /// Creates a new formatter with the given formatted string.
+    pub const fn new(formatted: &'a str) -> Self {
+        Self { formatted }
+    }
+
+    fn parse_style(input: &str) -> Option<(AnsiHtmlStyle, &str)> {
+        let sequence = input.strip_prefix("\u{1b}[")?;
+        let sequence_end = sequence.find('m')?;
+        let params = &sequence[..sequence_end];
+        let rest = &sequence[sequence_end + 1..];
+
+        if params == "0" {
+            return Some((AnsiHtmlStyle::Reset, rest));
+        }
+
+        let mut parts = params.split(';');
+        let mode = parts.next()?.parse().ok()?;
+
+        if parts.next()? != "38" || parts.next()? != "5" {
+            return None;
+        }
+
+        let color = parts.next()?.parse().ok()?;
+
+        if parts.next().is_some() {
+            return None;
+        }
+
+        Some((AnsiHtmlStyle::Open { mode, color }, rest))
+    }
+
+    fn write_escaped<W: Write>(html: &mut W, text: &str) -> fmt::Result {
+        for c in text.chars() {
+            match c {
+                '&' => html.write_str("&amp;")?,
+                '<' => html.write_str("&lt;")?,
+                '>' => html.write_str("&gt;")?,
+                _ => html.write_char(c)?,
+            }
+        }
+
+        Ok(())
+    }
+
+    fn write_span<W: Write>(html: &mut W, mode: u8, color: u8) -> fmt::Result {
+        let (red, green, blue) = Self::xterm_color(color);
+
+        write!(html, "<span style=\"color: rgb({red}, {green}, {blue})")?;
+
+        if mode & 1 != 0 {
+            html.write_str("; font-weight: bold")?;
+        }
+
+        if mode & 2 != 0 {
+            html.write_str("; opacity: 0.65")?;
+        }
+
+        if mode & 4 != 0 {
+            html.write_str("; font-style: italic")?;
+        }
+
+        html.write_str("\">")
+    }
+
+    fn xterm_color(color: u8) -> (u8, u8, u8) {
+        const ANSI_COLORS: [(u8, u8, u8); 16] = [
+            (0, 0, 0),
+            (205, 0, 0),
+            (0, 205, 0),
+            (205, 205, 0),
+            (0, 0, 238),
+            (205, 0, 205),
+            (0, 205, 205),
+            (229, 229, 229),
+            (127, 127, 127),
+            (255, 0, 0),
+            (0, 255, 0),
+            (255, 255, 0),
+            (92, 92, 255),
+            (255, 0, 255),
+            (0, 255, 255),
+            (255, 255, 255),
+        ];
+        const COLOR_CUBE: [u8; 6] = [0, 95, 135, 175, 215, 255];
+
+        if color < 16 {
+            return ANSI_COLORS[color as usize];
+        }
+
+        if color < 232 {
+            let color = color - 16;
+            return (
+                COLOR_CUBE[(color / 36) as usize],
+                COLOR_CUBE[((color / 6) % 6) as usize],
+                COLOR_CUBE[(color % 6) as usize],
+            );
+        }
+
+        let level = 8 + (color - 232) * 10;
+        (level, level, level)
+    }
+}
+
+impl fmt::Display for AnsiHtmlFormatter<'_> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let mut remaining = self.formatted;
+        let mut span_is_open = false;
+
+        f.write_str("<div style=\"white-space: pre-wrap; margin: 0;\">")?;
+
+        while let Some(escape_start) = remaining.find('\u{1b}') {
+            Self::write_escaped(f, &remaining[..escape_start])?;
+            remaining = &remaining[escape_start..];
+
+            if let Some((style, rest)) = Self::parse_style(remaining) {
+                if span_is_open {
+                    f.write_str("</span>")?;
+                    span_is_open = false;
+                }
+
+                if let AnsiHtmlStyle::Open { mode, color } = style {
+                    Self::write_span(f, mode, color)?;
+                    span_is_open = true;
+                }
+
+                remaining = rest;
+            } else {
+                remaining = &remaining['\u{1b}'.len_utf8()..];
+            }
+        }
+
+        Self::write_escaped(f, remaining)?;
+
+        if span_is_open {
+            f.write_str("</span>")?;
+        }
+
+        f.write_str("</div>")
     }
 }
 
@@ -1164,9 +1342,10 @@ impl FormattedPrintMul for MulView<'_> {
                     let (_, e) = p.get_base_exp();
                     if let AtomView::Num(n) = e
                         && let CoefficientView::Natural(num, _, 0, 1) = n.get_coeff_view()
-                            && num < 0 {
-                                return false;
-                            }
+                        && num < 0
+                    {
+                        return false;
+                    }
                 }
                 true
             });
@@ -1215,14 +1394,15 @@ impl FormattedPrintMul for MulView<'_> {
                 let (_, e) = p.get_base_exp();
                 if let AtomView::Num(n) = e
                     && let CoefficientView::Natural(num, _, 0, 1) = n.get_coeff_view()
-                        && num < 0 {
-                            den_count += 1;
+                    && num < 0
+                {
+                    den_count += 1;
 
-                            if opts.fill_indented_lines && opts.max_line_length.is_some() {
-                                den_char_count += x.estimate_char_length(opts);
-                            }
-                            continue;
-                        }
+                    if opts.fill_indented_lines && opts.max_line_length.is_some() {
+                        den_char_count += x.estimate_char_length(opts);
+                    }
+                    continue;
+                }
             }
 
             num_count += 1;
@@ -1948,7 +2128,7 @@ impl FormattedPrintAdd for AddView<'_> {
         let mut was_split = false;
         for x in self.iter() {
             if let Some(max_terms) = opts.max_terms
-                && opts.mode.is_symbolica()
+                && (opts.mode.is_symbolica() || opts.mode.is_latex() || opts.mode.is_typst())
                 && count >= max_terms
             {
                 break;
@@ -1975,7 +2155,11 @@ impl FormattedPrintAdd for AddView<'_> {
                 }
 
                 if count > 0 && !last_arg_splits_with_brackets {
-                    f.write_char('\n')?;
+                    if opts.mode.is_latex() && print_state.top_level_add_child {
+                        f.write_str("\\\\\n")?;
+                    } else {
+                        f.write_char('\n')?;
+                    }
 
                     if print_state.top_level_add_child && opts.terms_on_new_line {
                         char_count = 0; // do not indent top-level sum
@@ -2051,7 +2235,7 @@ mod test {
         atom::{AtomCore, AtomView},
         domains::{SelfRing, finite_field::Zp, integer::Z},
         function, parse, parse_lit,
-        printer::{AnsiWrap, AtomPrinter, ColorMode, PrintOptions, PrintState},
+        printer::{AnsiHtmlFormatter, AnsiWrap, AtomPrinter, ColorMode, PrintOptions, PrintState},
         symbol,
     };
 
@@ -2068,6 +2252,22 @@ mod test {
                 .color_mode(ColorMode::Never)
                 .to_string(),
             "+"
+        );
+    }
+
+    #[test]
+    fn ansi_html_escapes_text() {
+        assert_eq!(
+            AnsiHtmlFormatter::new("a<&b").to_string(),
+            "<div style=\"white-space: pre-wrap; margin: 0;\">a&lt;&amp;b</div>"
+        );
+    }
+
+    #[test]
+    fn ansi_html_converts_color_spans() {
+        assert_eq!(
+            AnsiHtmlFormatter::new("a\u{1b}[0;38;5;3m+\u{1b}[0mb").to_string(),
+            "<div style=\"white-space: pre-wrap; margin: 0;\">a<span style=\"color: rgb(205, 205, 0)\">+</span>b</div>"
         );
     }
 
