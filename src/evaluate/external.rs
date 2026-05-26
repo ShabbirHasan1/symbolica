@@ -226,13 +226,8 @@ impl<T> std::fmt::Display for ExternalFunctionContainer<T> {
     }
 }
 
-/// An optimized evaluator for expressions that can evaluate expressions with parameters.
-/// The evaluator can be called directly using [Self::evaluate] or it can be exported
-/// to high-performance C++ code using [Self::export_cpp].
-///
-/// To call the evaluator with external functions, use [Self::with_external_functions] to
-/// register implementation for them.
-/// An external function that can be called by an evaluator.
+/// An external function implementation that can be registered on
+/// [`crate::atom::EvaluationInfo`] and called by an evaluator.
 pub trait ExternalFunction<T>: Fn(&[T]) -> T + Send + Sync + DynClone + Send + Sync {}
 dyn_clone::clone_trait_object!(<T> ExternalFunction<T>);
 impl<T, F: Clone + Send + Sync + Fn(&[T]) -> T + Send + Sync> ExternalFunction<T> for F {}

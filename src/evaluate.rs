@@ -37,7 +37,10 @@ pub use evaluator::*;
 pub use export::*;
 pub use external::*;
 pub use function_map::*;
-pub use instruction::{ComplexPhase, Instruction, InstructionList, Label, Slot, VectorInstruction};
+pub use instruction::{
+    ComplexPhase, ExportedInstructions, Instruction, InstructionList, Label, Slot,
+    VectorInstruction,
+};
 pub use optimize::*;
 pub use tree::*;
 
@@ -45,7 +48,7 @@ use function_map::Expr;
 use instruction::Instr;
 
 use crate::{
-    LicenseManager,
+    LicenseManager, OperationCount,
     atom::{Atom, AtomCore, AtomView, EvaluationInfo, Indeterminate, KeyLookup, Symbol},
     coefficient::CoefficientView,
     combinatorics::unique_permutations,
@@ -356,9 +359,12 @@ mod test {
         let numerical = f64::try_from(r.to_float(53)).unwrap();
         let ev = r.evaluator(&[] as &[Atom]).build().unwrap();
         let ev2 = ev.map_coeff(&|c| c.re.to_f64());
-        let (instr, _, constants) = ev2.export_instructions();
-        assert!(matches!(instr[0], Instruction::Assign(_, _)));
-        assert!((constants[0] - numerical).abs() / numerical < f64::EPSILON);
+        let exported = ev2.export_instructions();
+        assert!(matches!(
+            exported.instructions[0],
+            Instruction::Assign(_, _)
+        ));
+        assert!((exported.constants[0] - numerical).abs() / numerical < f64::EPSILON);
     }
 
     #[test]

@@ -49,6 +49,7 @@ pub struct StatsOptions {
     pub(crate) color_large_change_threshold: Option<f64>,
 }
 
+/// Represents the state of the transformer, including statistics export options.
 #[derive(Clone, Default)]
 pub struct TransformerState {
     pub stats_export: Option<Arc<Mutex<dyn std::io::Write + Send>>>,

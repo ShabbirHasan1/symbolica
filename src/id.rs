@@ -22,6 +22,7 @@ use ahash::{HashMap, HashSet};
 use dyn_clone::DynClone;
 
 use crate::{
+    OperationCount,
     atom::{
         Atom, AtomCore, AtomType, AtomView, Indeterminate, ListIterator, SliceType, Symbol,
         representation::InlineVar,
@@ -785,22 +786,24 @@ impl AliasedAtom {
         self
     }
 
-    /// Return the number of additions and multiplications needed to evaluate the aliased atom.
-    pub fn count_operations(&self) -> (usize, usize) {
-        let (mut add, mut mul) = (0, 0);
+    /// Return the number of operations needed to evaluate the aliased atom.
+    pub fn count_operations(&self) -> OperationCount {
+        let mut count = OperationCount::default();
 
         let mut counter = |a: AtomView<'_>| match a {
             AtomView::Mul(m) => {
-                mul += m.get_nargs() - 1;
+                count.multiplications += m.get_nargs() - 1;
                 true
             }
             AtomView::Add(a) => {
-                add += a.get_nargs() - 1;
+                count.additions += a.get_nargs() - 1;
                 true
             }
             AtomView::Pow(p) => {
                 if let Ok(i) = isize::try_from(p.get_exp()) {
-                    mul += i.unsigned_abs() - 1;
+                    count.add_integer_power(i as i64);
+                } else {
+                    count.add_function_call();
                 }
                 true
             }
@@ -813,7 +816,7 @@ impl AliasedAtom {
             x.visitor(&mut counter);
         }
 
-        (add, mul)
+        count
     }
 }
 
@@ -1123,12 +1126,12 @@ impl<'a> AtomView<'a> {
         }
     }
 
-    /// Return the number of additions and multiplications needed to evaluate the aliased atom.
+    /// Return the number of operations needed to evaluate the aliased atom.
     pub fn count_operations_with_subexpressions(
         &self,
         cses: &mut HashSet<AtomView<'a>>,
-    ) -> (usize, usize) {
-        let (mut add, mut mul) = (0, 0);
+    ) -> OperationCount {
+        let mut count = OperationCount::default();
 
         let mut counter = |a: AtomView<'a>| {
             if !cses.insert(a) {
@@ -1137,16 +1140,18 @@ impl<'a> AtomView<'a> {
 
             match a {
                 AtomView::Mul(m) => {
-                    mul += m.get_nargs() - 1;
+                    count.multiplications += m.get_nargs() - 1;
                     true
                 }
                 AtomView::Add(a) => {
-                    add += a.get_nargs() - 1;
+                    count.additions += a.get_nargs() - 1;
                     true
                 }
                 AtomView::Pow(p) => {
                     if let Ok(i) = isize::try_from(p.get_exp()) {
-                        mul += i.unsigned_abs() - 1;
+                        count.add_integer_power(i as i64);
+                    } else {
+                        count.add_function_call();
                     }
                     true
                 }
@@ -1156,7 +1161,7 @@ impl<'a> AtomView<'a> {
 
         self.visitor(&mut counter);
 
-        (add, mul)
+        count
     }
 
     /// Returns true iff `self` contains `a` literally or contains the symbol of `a` if `a` is a variable.

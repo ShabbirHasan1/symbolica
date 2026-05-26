@@ -42,6 +42,7 @@ use crate::{
     warn,
 };
 
+/// A trait for converting a `Coefficient` to a `Ring` element.
 pub trait ConvertToRing: Ring {
     /// Convert from an `Integer` to a Ring.
     fn element_from_integer(&self, number: Integer) -> Self::Element;
@@ -1908,54 +1909,46 @@ impl CoefficientView<'_> {
                     }
                 } else {
                     match self {
-                        CoefficientView::Natural(rn, _, ir, _) => {
-                            (
-                                Coefficient::one(),
-                                if *rn > 0 && *ir == 0 {
-                                    Coefficient::Infinity(None)
-                                } else {
-                                    warn!(
-                                        "Created indeterminate by raising {} to the power of {}",
-                                        self.to_owned(),
-                                        other.to_owned()
-                                    );
+                        CoefficientView::Natural(rn, _, ir, _) => (
+                            Coefficient::one(),
+                            if *rn > 0 && *ir == 0 {
+                                Coefficient::Infinity(None)
+                            } else {
+                                warn!(
+                                    "Created indeterminate by raising {} to the power of {}",
+                                    self.to_owned(),
+                                    other.to_owned()
+                                );
 
-                                    Coefficient::Indeterminate
-                                },
-                                Coefficient::one(),
-                            )
-                        }
-                        CoefficientView::Large(rn, ir) => {
-                            (
-                                Coefficient::one(),
-                                if !rn.is_negative() && !rn.is_zero() && ir.is_zero() {
-                                    Coefficient::Infinity(None)
-                                } else {
-                                    warn!(
-                                        "Created indeterminate by raising {} to the power of {}",
-                                        self.to_owned(),
-                                        other.to_owned()
-                                    );
+                                Coefficient::Indeterminate
+                            },
+                            Coefficient::one(),
+                        ),
+                        CoefficientView::Large(rn, ir) => (
+                            Coefficient::one(),
+                            if !rn.is_negative() && !rn.is_zero() && ir.is_zero() {
+                                Coefficient::Infinity(None)
+                            } else {
+                                warn!(
+                                    "Created indeterminate by raising {} to the power of {}",
+                                    self.to_owned(),
+                                    other.to_owned()
+                                );
 
-                                    Coefficient::Indeterminate
-                                },
-                                Coefficient::one(),
-                            )
-                        }
-                        CoefficientView::Indeterminate => {
-                            (
-                                Coefficient::one(),
-                                Coefficient::Indeterminate,
-                                Coefficient::one(),
-                            )
-                        }
-                        CoefficientView::Infinity(_) => {
-                            (
-                                Coefficient::one(),
-                                Coefficient::Infinity(None),
-                                Coefficient::one(),
-                            )
-                        }
+                                Coefficient::Indeterminate
+                            },
+                            Coefficient::one(),
+                        ),
+                        CoefficientView::Indeterminate => (
+                            Coefficient::one(),
+                            Coefficient::Indeterminate,
+                            Coefficient::one(),
+                        ),
+                        CoefficientView::Infinity(_) => (
+                            Coefficient::one(),
+                            Coefficient::Infinity(None),
+                            Coefficient::one(),
+                        ),
                         _ => {
                             error!(
                                 "Cannot simplify infinite exponent with float, finite field or rational polynomial base"
@@ -2805,13 +2798,14 @@ impl<'a> TryFrom<AtomView<'a>> for f64 {
         let f = value.to_float(16);
 
         if let AtomView::Num(n) = f.as_view()
-            && let CoefficientView::Float(r, i) = n.get_coeff_view() {
-                if i.is_zero() {
-                    return Ok(r.to_float().to_f64());
-                } else {
-                    return Err("Cannot convert complex number to float");
-                }
+            && let CoefficientView::Float(r, i) = n.get_coeff_view()
+        {
+            if i.is_zero() {
+                return Ok(r.to_float().to_f64());
+            } else {
+                return Err("Cannot convert complex number to float");
             }
+        }
 
         Err("Not a number")
     }
@@ -2860,9 +2854,10 @@ impl<'a> TryFrom<AtomView<'a>> for Complex<f64> {
         let f = value.to_float(16);
 
         if let AtomView::Num(n) = f.as_view()
-            && let CoefficientView::Float(r, i) = n.get_coeff_view() {
-                return Ok(Complex::new(r.to_float().to_f64(), i.to_float().to_f64()));
-            }
+            && let CoefficientView::Float(r, i) = n.get_coeff_view()
+        {
+            return Ok(Complex::new(r.to_float().to_f64(), i.to_float().to_f64()));
+        }
 
         Err("Not a number")
     }
@@ -3081,10 +3076,11 @@ impl AtomView<'_> {
                     }
                     _ => {
                         if let Some(eval) = s.get_evaluation_info()
-                            && let Ok(v) = eval.evaluate_constant(&[], binary_prec) {
-                                out.to_num(v);
-                                return;
-                            }
+                            && let Ok(v) = eval.evaluate_constant(&[], binary_prec)
+                        {
+                            out.to_num(v);
+                            return;
+                        }
 
                         out.set_from_view(self);
                     }

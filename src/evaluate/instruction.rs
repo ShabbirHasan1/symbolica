@@ -133,10 +133,32 @@ impl std::fmt::Display for Instruction {
     }
 }
 
+/// Instructions and data exported from an [`ExpressionEvaluator`].
+///
+/// This is the portable representation used when an evaluator is translated to another runtime.
+/// Parameters are referenced by [`Slot::Param`], constants by [`Slot::Const`], temporaries by
+/// [`Slot::Temp`], and outputs by [`Slot::Out`].
+#[derive(Debug, Clone)]
+pub struct ExportedInstructions<T> {
+    /// The linear instruction stream.
+    pub instructions: Vec<Instruction>,
+    /// The number of temporary storage slots required to execute `instructions`.
+    pub temporary_count: usize,
+    /// Constant values referenced by [`Slot::Const`].
+    pub constants: Vec<T>,
+}
+
 impl<T: Clone> ExpressionEvaluator<T> {
-    /// Export the instructions, the size of the temporary storage, and the list of constants.
+    /// Export the instruction stream, temporary storage size, and constants.
+    ///
+    /// The returned [`ExportedInstructions`] value contains all data needed to execute the evaluator
+    /// outside Symbolica:
+    /// - [`ExportedInstructions::instructions`] is the linear instruction list.
+    /// - [`ExportedInstructions::temporary_count`] is the number of temporary slots required.
+    /// - [`ExportedInstructions::constants`] contains the values addressed by [`Slot::Const`].
+    ///
     /// This function can be used to create an evaluator in a different language.
-    pub fn export_instructions(&self) -> (Vec<Instruction>, usize, Vec<T>) {
+    pub fn export_instructions(&self) -> ExportedInstructions<T> {
         let mut instr = vec![];
         let constants: Vec<_> = self.stack[self.param_count..self.reserved_indices].to_vec();
 
@@ -248,7 +270,11 @@ impl<T: Clone> ExpressionEvaluator<T> {
             }
         }
 
-        (instr, self.stack.len() - self.reserved_indices, constants)
+        ExportedInstructions {
+            instructions: instr,
+            temporary_count: self.stack.len() - self.reserved_indices,
+            constants,
+        }
     }
 }
 

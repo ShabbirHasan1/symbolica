@@ -1,5 +1,6 @@
 use super::*;
 
+/// An evaluator for symbolic expressions. Use [AtomCore::evaluator] to create an evaluator for a given expression.
 #[derive(Clone)]
 pub struct ExpressionEvaluator<T> {
     pub(super) stack: Vec<T>,
@@ -248,6 +249,17 @@ impl<T: Real> ExpressionEvaluator<T> {
     }
 
     /// Evaluate the expression evaluator and write the results in `out`.
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// use symbolica::prelude::*;
+    /// let mut evaluator = parse!("x^2").evaluator(&[parse!("x")]).build()
+    ///     .unwrap().map_coeff(&|c| c.re.to_f64());
+    /// let mut out = [0.];
+    /// evaluator.evaluate(&[2.], &mut out);
+    /// assert_eq!(out, [4.]);
+    /// ```
     #[inline]
     pub fn evaluate(&mut self, params: &[T], out: &mut [T]) {
         self.try_evaluate(params, out).unwrap();
@@ -437,20 +449,23 @@ impl<T: Default> ExpressionEvaluator<T> {
         &self.stack[self.param_count..self.reserved_indices]
     }
 
-    /// Return the total number of additions and multiplications.
-    pub fn count_operations(&self) -> (usize, usize) {
-        let mut add_count = 0;
-        let mut mul_count = 0;
+    /// Return the total number of operations.
+    pub fn count_operations(&self) -> OperationCount {
+        let mut count = OperationCount::default();
 
         for (instr, _) in &self.instructions {
             match instr {
-                Instr::Add(_, s) => add_count += s.len() - 1,
-                Instr::Mul(_, s) => mul_count += s.len() - 1,
+                Instr::Add(_, s) => count.additions += s.len() - 1,
+                Instr::Mul(_, s) => count.multiplications += s.len() - 1,
+                Instr::Pow(_, _, e) => count.add_integer_power(*e),
+                Instr::Powf(..) | Instr::BuiltinFun(..) | Instr::ExternalFun(..) => {
+                    count.add_function_call()
+                }
                 _ => {}
             }
         }
 
-        (add_count, mul_count)
+        count
     }
 
     /// Remove common instructions and return the number of removed instructions.

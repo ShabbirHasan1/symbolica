@@ -116,6 +116,7 @@ pub struct MonomialData {
     column: usize,
 }
 
+/// A Groebner basis for a polynomial ideal.
 pub struct GroebnerBasis<R: Field, E: Exponent, O: MonomialOrder> {
     pub system: Vec<MultivariatePolynomial<R, E, O>>,
     pub print_stats: bool,

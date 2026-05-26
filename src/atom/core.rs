@@ -138,7 +138,7 @@ pub trait AtomCore: private::Sealed + Sized {
         }
     }
 
-    /// Take the `self` to the power `exp`. Use [`Atom::rpow()`] for the reverse operation.
+    /// Take the `self` to the power `exp`. Use [`Self::rpow`] for the reverse operation.
     fn pow<'a, T: Into<AtomOrView<'a>>>(&self, exp: T) -> Self::Output {
         Workspace::get_local().with(|ws| {
             let mut t = ws.new_atom();
@@ -847,11 +847,12 @@ pub trait AtomCore: private::Sealed + Sized {
 
     /// Create an efficient evaluator for a (nested) expression.
     /// All free parameters must appear in `params` and all nested functions
-    /// must be registered using [`EvaluatorBuilder::add_function`] or [`EvaluatorBuilder::add_function_with_map`].
+    /// must be registered using [`EvaluatorBuilder::add_function`] or [`EvaluatorBuilder::add_tagged_function`].
     /// All other functions, must have an evaluation hook.
     ///
-    /// For the best performance, the evaluator should be JIT-compiled ([ExpressionEvaluator::jit_compile])
-    /// or compiled to C++ with inline ASM using [ExpressionEvaluator::export_cpp].
+    /// For the best performance, the evaluator should be JIT-compiled
+    /// ([`crate::evaluate::ExpressionEvaluator::jit_compile`]) or compiled to C++ with inline ASM
+    /// using [`crate::evaluate::ExpressionEvaluator::export_cpp`].
     ///
     /// # Examples
     ///
@@ -900,7 +901,7 @@ pub trait AtomCore: private::Sealed + Sized {
 
     /// Create an efficient evaluator for (nested) expressions.
     /// All free parameters must appear in `params` and all nested functions
-    /// must be registered using [`EvaluatorBuilder::add_function`] or [`EvaluatorBuilder::add_function_with_map`].
+    /// must be registered using [`EvaluatorBuilder::add_function`] or [`EvaluatorBuilder::add_tagged_function`].
     /// All other functions, must have an evaluation hook.
     ///
     /// # Example
@@ -913,7 +914,7 @@ pub trait AtomCore: private::Sealed + Sized {
     /// let mut evaluator = Atom::evaluator_multiple(&[expr1, expr2], &params)
     ///     .build()
     ///     .unwrap()
-    ///     .map_coeff(&|c| c.to_real().unwrap().to_f64());
+    ///     .map_coeff(&|c| c.re.to_f64());
     /// let mut out = vec![0., 0.];
     /// evaluator.evaluate(&[1.0, 2.0], &mut out);
     /// assert_eq!(out, &[3.0, -1.0]);

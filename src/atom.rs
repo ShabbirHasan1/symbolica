@@ -455,8 +455,7 @@ impl EvaluationInfo {
     ///
     /// The snippet is inserted verbatim into C++ output when an evaluator exports a
     /// call to this symbol as an external function. It should define a function
-    /// with the exported name, which is the symbol's ASCII name by default or the
-    /// rename configured in [`crate::evaluate::FunctionMap::add_external_function`].
+    /// with the exported name, which is derived from the symbol's ASCII name.
     pub fn with_cpp(mut self, snippet: impl Into<String>) -> Self {
         self.cpp = Some(snippet.into());
         self

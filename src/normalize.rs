@@ -957,17 +957,18 @@ impl AtomView<'_> {
                         }
 
                         if id.get_id() == Symbol::ABS_ID
-                            && let Coefficient::Complex(c) = n.get_coeff_view().to_owned() {
-                                if c.is_real() {
-                                    out.to_num(c.re.abs());
-                                } else {
-                                    let r = c.norm_squared();
-                                    let mut buffer = workspace.new_atom();
-                                    buffer.to_num(r);
-                                    *out = buffer.pow((1, 2));
-                                }
-                                return;
+                            && let Coefficient::Complex(c) = n.get_coeff_view().to_owned()
+                        {
+                            if c.is_real() {
+                                out.to_num(c.re.abs());
+                            } else {
+                                let r = c.norm_squared();
+                                let mut buffer = workspace.new_atom();
+                                buffer.to_num(r);
+                                *out = buffer.pow((1, 2));
                             }
+                            return;
+                        }
                     } else if id.get_id() == Symbol::ABS_ID && arg.is_positive() {
                         let mut buffer = workspace.new_atom();
                         buffer.set_from_view(&arg);
@@ -1340,22 +1341,23 @@ impl AtomView<'_> {
                     && e.get_tag_count() == 0
                     && let Some(e) = e.get_evaluator::<Complex<Float>>(&[])
                     && let AtomView::Fun(f) = out.as_view()
-                        && f.iter().all(|arg| {
-                            if let AtomView::Num(n) = arg
-                                && n.get_coeff_view().is_float()
-                            {
-                                true
-                            } else {
-                                false
-                            }
-                        }) {
-                            let args = f
-                                .iter()
-                                .map(|x| Complex::<Float>::try_from(x).unwrap())
-                                .collect::<Vec<_>>();
-                            let result = (e)(&args);
-                            out.to_num(result);
+                    && f.iter().all(|arg| {
+                        if let AtomView::Num(n) = arg
+                            && n.get_coeff_view().is_float()
+                        {
+                            true
+                        } else {
+                            false
                         }
+                    })
+                {
+                    let args = f
+                        .iter()
+                        .map(|x| Complex::<Float>::try_from(x).unwrap())
+                        .collect::<Vec<_>>();
+                    let result = (e)(&args);
+                    out.to_num(result);
+                }
             }
             AtomView::Pow(p) => {
                 let (base, exp) = p.get_base_exp();

@@ -553,8 +553,7 @@ impl<T: DualNumberStructure> Vectorize<Complex<Rational>> for Dualizer<T> {
                     let mut scale = 1;
                     for p in 1..self.dual.get_max_depth() + 1 {
                         scale *= p;
-                        num = num.clone()
-                            * (num.from_usize(2).inv() - &num.from_usize(p - 1));
+                        num = num.clone() * (num.from_usize(2).inv() - &num.from_usize(p - 1));
                         accum = mul(&accum, &r, mult_table, self, instrs);
 
                         let c = instrs

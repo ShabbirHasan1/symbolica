@@ -87,10 +87,38 @@ where
     }
 }
 
+/// A polynomial quotient of two multivariate polynomials over a ring.
 #[derive(Clone, PartialEq, Eq, Hash, Debug)]
 pub struct RationalPolynomial<R: Ring, E: PositiveExponent = u16> {
     pub numerator: MultivariatePolynomial<R, E>,
     pub denominator: MultivariatePolynomial<R, E>,
+}
+
+/// The result of rational-function integration.
+///
+/// The integral is represented as the sum of all [`rational_parts`](Self::rational_parts) and all
+/// [`logarithmic_parts`](Self::logarithmic_parts). Logarithmic parts may represent ordinary logs or
+/// algebraic root sums; see [`LogarithmicIntegralTerm`] for the exact interpretation.
+#[derive(Clone, PartialEq, Eq, Hash, Debug)]
+pub struct RationalIntegral<R: Ring, E: PositiveExponent = u16> {
+    /// Rational terms in the antiderivative.
+    pub rational_parts: Vec<RationalPolynomial<R, E>>,
+    /// Logarithmic terms in the antiderivative.
+    pub logarithmic_parts: Vec<LogarithmicIntegralTerm<R, E>>,
+}
+
+/// A logarithmic term produced by rational-function integration.
+///
+/// If `coefficient` depends on the temporary root-sum variable `z`, this represents
+/// `sum_(coefficient(z) = 0) z*log(argument(var, z))`. If it does not depend on `z`, it represents
+/// the ordinary term `coefficient*log(argument)`.
+#[derive(Clone, PartialEq, Eq, Hash, Debug)]
+pub struct LogarithmicIntegralTerm<R: Ring, E: PositiveExponent = u16> {
+    /// The logarithmic coefficient, or the defining polynomial for an algebraic root-sum
+    /// coefficient.
+    pub coefficient: RationalPolynomial<R, E>,
+    /// The argument of the logarithm.
+    pub argument: RationalPolynomial<R, E>,
 }
 
 impl<R: Ring, E: PositiveExponent> InternalOrdering for RationalPolynomial<R, E> {
@@ -1338,12 +1366,13 @@ where
     RationalPolynomial<R, E>: FromNumeratorAndDenominator<R, R, E>,
     MultivariatePolynomial<R, E>: Factorize,
 {
-    /// Integrate the rational function in `var`. It returns a tuple
-    /// `(ps, ls)` where `ps` should be interpreted as the sum of the rational parts
-    /// and `ls` as a sum of logarithmic parts. Each logarithmic part is a tuple `(r, a)`
-    /// that represents `sum_(r(z) = 0) z*log(a(var, z))` if `r` is dependent on `z`,
-    /// else it is `r*log(a)`.
-    pub fn integrate(&self, var: usize) -> (Vec<Self>, Vec<(Self, Self)>) {
+    /// Integrate the rational function in `var`.
+    ///
+    /// The returned [`RationalIntegral`] stores rational terms separately from logarithmic terms.
+    /// The antiderivative is the sum of all rational parts and all logarithmic parts. A logarithmic
+    /// term with coefficient `r` and argument `a` represents `sum_(r(z) = 0) z*log(a(var, z))` if
+    /// `r` depends on the temporary root-sum variable `z`; otherwise it represents `r*log(a)`.
+    pub fn integrate(&self, var: usize) -> RationalIntegral<R, E> {
         let rat_field = RationalPolynomialField::from_poly(&self.numerator);
         let n = self
             .numerator
@@ -1357,7 +1386,10 @@ where
 
         if d.is_constant() {
             let r = &Self::from_univariate(n.integrate()) / &Self::from_univariate(d);
-            return (vec![r], vec![]);
+            return RationalIntegral {
+                rational_parts: vec![r],
+                logarithmic_parts: vec![],
+            };
         }
 
         let (q, r) = n.quot_rem(&d);
@@ -1594,18 +1626,24 @@ where
                             res = &res + &(t.coefficient * &mm.into());
                         }
 
-                        w.push((&sol * &constant, res));
+                        w.push(LogarithmicIntegralTerm {
+                            coefficient: &sol * &constant,
+                            argument: res,
+                        });
                     } else {
-                        w.push((
-                            &RationalPolynomial::from(ff.clone()) * &constant,
-                            res.clone(),
-                        ));
+                        w.push(LogarithmicIntegralTerm {
+                            coefficient: &RationalPolynomial::from(ff.clone()) * &constant,
+                            argument: res.clone(),
+                        });
                     }
                 }
             }
         }
 
-        (v, w)
+        RationalIntegral {
+            rational_parts: v,
+            logarithmic_parts: w,
+        }
     }
 }
 
@@ -1648,7 +1686,9 @@ mod test {
         let p: RationalPolynomial<_, _> =
             parse!("1/(v1 + 1)^5").to_rational_polynomial::<_, _, u8>(&Q, &Z, None);
 
-        let (r, l) = p.integrate(0);
+        let integral = p.integrate(0);
+        let r = integral.rational_parts;
+        let l = integral.logarithmic_parts;
 
         assert_eq!(
             r,
@@ -1672,7 +1712,9 @@ mod test {
                 Some(Arc::new(vec![symbol!("v1").into(), symbol!("v2").into()])),
             );
 
-        let (r, l) = p.integrate(0);
+        let integral = p.integrate(0);
+        let r = integral.rational_parts;
+        let l = integral.logarithmic_parts;
         assert_eq!(
             r,
             vec![
@@ -1692,7 +1734,13 @@ mod test {
                 Some(Arc::new(vec![symbol!("v1").into(), symbol!("v2").into()])),
             );
 
-        let (r, l) = p.integrate(0);
+        let integral = p.integrate(0);
+        let r = integral.rational_parts;
+        let l = integral
+            .logarithmic_parts
+            .into_iter()
+            .map(|x| (x.coefficient, x.argument))
+            .collect::<Vec<_>>();
 
         let v = l[0].0.get_variables().clone();
 
@@ -1721,7 +1769,13 @@ mod test {
             parse!("(36v1^2+1167v1+3549/2)/(v1^3+23/30v1^2-2/15v1-2/15)")
                 .to_rational_polynomial::<_, _, u8>(&Q, &Z, None);
 
-        let (r, mut l) = p.integrate(0);
+        let integral = p.integrate(0);
+        let r = integral.rational_parts;
+        let mut l = integral
+            .logarithmic_parts
+            .into_iter()
+            .map(|x| (x.coefficient, x.argument))
+            .collect::<Vec<_>>();
         l.sort_by(|a, b| a.0.internal_cmp(&b.0).then(a.1.internal_cmp(&b.1)));
 
         let v = l[0].0.get_variables().clone();
@@ -1753,7 +1807,13 @@ mod test {
         )
         .to_rational_polynomial::<_, _, u8>(&Q, &Z, None);
 
-        let (r, mut l) = p.integrate(0);
+        let integral = p.integrate(0);
+        let r = integral.rational_parts;
+        let mut l = integral
+            .logarithmic_parts
+            .into_iter()
+            .map(|x| (x.coefficient, x.argument))
+            .collect::<Vec<_>>();
         let new_var = symbol!("v2");
 
         // root sum in the answer, rename the temporary variable
@@ -1790,7 +1850,13 @@ mod test {
         let p: RationalPolynomial<_, _> =
             parse!("1/(v1^3+v1)").to_rational_polynomial::<_, _, u8>(&Q, &Z, None);
 
-        let (r, mut l) = p.integrate(0);
+        let integral = p.integrate(0);
+        let r = integral.rational_parts;
+        let mut l = integral
+            .logarithmic_parts
+            .into_iter()
+            .map(|x| (x.coefficient, x.argument))
+            .collect::<Vec<_>>();
         l.sort_by(|a, b| a.0.internal_cmp(&b.0).then(a.1.internal_cmp(&b.1)));
 
         let v = l[0].0.get_variables().clone();
@@ -1816,7 +1882,13 @@ mod test {
         let p: RationalPolynomial<_, _> = parse!("(v1^4+v2+v1*v2+2*v1)/((v1-v2)(v1-2)(v1-4))")
             .to_rational_polynomial::<_, _, u8>(&Q, &Z, None);
 
-        let (r, mut l) = p.integrate(0);
+        let integral = p.integrate(0);
+        let r = integral.rational_parts;
+        let mut l = integral
+            .logarithmic_parts
+            .into_iter()
+            .map(|x| (x.coefficient, x.argument))
+            .collect::<Vec<_>>();
         l.sort_by(|a, b| a.0.internal_cmp(&b.0).then(a.1.internal_cmp(&b.1)));
 
         let v = l[0].0.get_variables().clone();

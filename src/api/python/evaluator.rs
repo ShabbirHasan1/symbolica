@@ -311,7 +311,7 @@ impl PythonExpressionEvaluator {
         &self,
         py: Python<'py>,
     ) -> PyResult<(Vec<Bound<'py, PyTuple>>, usize, Vec<PythonExpression>)> {
-        let (instr, max, _) = self.eval_complex.export_instructions();
+        let exported = self.eval_complex.export_instructions();
 
         fn slot_to_object(slot: &Slot) -> (&str, usize) {
             match slot {
@@ -323,7 +323,7 @@ impl PythonExpressionEvaluator {
         }
 
         let mut v = vec![];
-        for i in &instr {
+        for i in &exported.instructions {
             match i {
                 Instruction::Add(o, s, real_args) | Instruction::Mul(o, s, real_args) => {
                     v.push(PyTuple::new(
@@ -444,7 +444,7 @@ impl PythonExpressionEvaluator {
         }
         Ok((
             v,
-            max,
+            exported.temporary_count,
             self.rational_constants
                 .iter()
                 .map(|x| Atom::num(x.clone()).into())

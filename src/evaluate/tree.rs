@@ -205,16 +205,11 @@ impl<'a> AtomView<'a> {
     ) -> Result<ExpressionEvaluator<Complex<Rational>>, EvaluationError> {
         if settings.verbose {
             let mut cse = HashSet::default();
-            let (mut n_add, mut n_mul) = (0, 0);
+            let mut count = OperationCount::default();
             for e in expressions {
-                let (add, mul) = e.count_operations_with_subexpressions(&mut cse);
-                n_add += add;
-                n_mul += mul;
+                count += e.count_operations_with_subexpressions(&mut cse);
             }
-            info!(
-                "Initial ops: {} additions and {} multiplications",
-                n_add, n_mul
-            );
+            info!("Initial ops: {}", count);
         }
 
         if settings.horner_iterations == 0 {
@@ -256,16 +251,11 @@ impl<'a> AtomView<'a> {
 
         if settings.horner_iterations == 1 && settings.verbose {
             let mut cse = HashSet::default();
-            let (mut n_add, mut n_mul) = (0, 0);
+            let mut count = OperationCount::default();
             for e in expressions {
-                let (add, mul) = e.count_operations_with_subexpressions(&mut cse);
-                n_add += add;
-                n_mul += mul;
+                count += e.count_operations_with_subexpressions(&mut cse);
             }
-            info!(
-                "Horner scheme ops: {} additions and {} multiplications",
-                n_add, n_mul
-            );
+            info!("Horner scheme ops: {}", count);
         }
 
         let mut f = fn_map.clone();
@@ -287,11 +277,8 @@ impl<'a> AtomView<'a> {
             }
 
             if e.settings.verbose {
-                let (add_count, mul_count) = e.count_operations();
-                info!(
-                    "Removed {} common instructions: {} + and {} ×",
-                    r, add_count, mul_count
-                );
+                let count = e.count_operations();
+                info!("Removed {} common instructions: {}", r, count);
             }
         }
 
@@ -303,11 +290,8 @@ impl<'a> AtomView<'a> {
             }
 
             if e.settings.verbose {
-                let (add_count, mul_count) = e.count_operations();
-                info!(
-                    "Removed {} common pairs: {} + and {} ×",
-                    r, add_count, mul_count
-                );
+                let count = e.count_operations();
+                info!("Removed {} common pairs: {}", r, count);
             }
         }
 
@@ -329,23 +313,20 @@ impl<'a> AtomView<'a> {
             .map(|x| x.horner_scheme(Some(vars), true))
             .collect();
         let mut subexpr = HashSet::default();
-        let mut best_ops = (0, 0);
+        let mut best_ops = OperationCount::default();
         for h in &horner {
             let ops = h
                 .as_view()
                 .count_operations_with_subexpressions(&mut subexpr);
-            best_ops = (best_ops.0 + ops.0, best_ops.1 + ops.1);
+            best_ops += ops;
         }
 
         if settings.verbose {
-            info!(
-                "Initial Horner scheme ops: {} additions and {} multiplications",
-                best_ops.0, best_ops.1
-            );
+            info!("Initial Horner scheme ops: {}", best_ops);
         }
 
-        let best_mul = Arc::new(AtomicUsize::new(best_ops.1));
-        let best_add = Arc::new(AtomicUsize::new(best_ops.0));
+        let best_mul = Arc::new(AtomicUsize::new(best_ops.multiplications));
+        let best_add = Arc::new(AtomicUsize::new(best_ops.additions));
         let best_scheme = Arc::new(Mutex::new(vars.to_vec()));
 
         let n_iterations = settings.horner_iterations.max(1) - 1;
@@ -427,51 +408,55 @@ impl<'a> AtomView<'a> {
                             .map(|x| x.horner_scheme(Some(&cvars), true))
                             .collect();
                         let mut subexpr = HashSet::default();
-                        let mut cur_ops = (0, 0);
+                        let mut cur_ops = OperationCount::default();
 
                         for h in &horner {
                             let ops = h
                                 .as_view()
                                 .count_operations_with_subexpressions(&mut subexpr);
-                            cur_ops = (cur_ops.0 + ops.0, cur_ops.1 + ops.1);
+                            cur_ops += ops;
                         }
 
                         // prefer fewer multiplications
-                        if cur_ops.1 <= last_mul || cur_ops.1 == last_mul && cur_ops.0 <= last_add {
+                        if cur_ops.multiplications <= last_mul
+                            || cur_ops.multiplications == last_mul && cur_ops.additions <= last_add
+                        {
                             if settings.verbose {
                                 info!(
-                                    "Accept move at step {}/{}: {} + and {} ×",
+                                    "Accept move at step {}/{}: {}",
                                     j,
                                     settings.horner_iterations / n_cores,
-                                    cur_ops.0,
-                                    cur_ops.1
+                                    cur_ops
                                 );
                             }
 
-                            last_add = cur_ops.0;
-                            last_mul = cur_ops.1;
+                            last_add = cur_ops.additions;
+                            last_mul = cur_ops.multiplications;
 
-                            if cur_ops.1 <= best_mul.load(Ordering::Relaxed)
-                                || cur_ops.1 == best_mul.load(Ordering::Relaxed)
-                                    && cur_ops.0 <= best_add.load(Ordering::Relaxed)
+                            if cur_ops.multiplications <= best_mul.load(Ordering::Relaxed)
+                                || cur_ops.multiplications == best_mul.load(Ordering::Relaxed)
+                                    && cur_ops.additions <= best_add.load(Ordering::Relaxed)
                             {
                                 let mut best_scheme = best_scheme.lock().unwrap();
 
                                 // check again if it is the best now that we have locked
                                 let best_mul_l = best_mul.load(Ordering::Relaxed);
                                 let best_add_l = best_add.load(Ordering::Relaxed);
-                                if cur_ops.1 <= best_mul_l
-                                    || cur_ops.1 == best_mul_l && cur_ops.0 <= best_add_l
+                                if cur_ops.multiplications <= best_mul_l
+                                    || cur_ops.multiplications == best_mul_l
+                                        && cur_ops.additions <= best_add_l
                                 {
-                                    if cur_ops.0 == best_add_l && cur_ops.1 == best_mul_l {
+                                    if cur_ops.additions == best_add_l
+                                        && cur_ops.multiplications == best_mul_l
+                                    {
                                         if *best_scheme < cvars {
                                             // on a draw, accept the lexicographical minimum
                                             // to get a deterministic scheme
                                             *best_scheme = cvars.clone();
                                         }
                                     } else {
-                                        best_mul.store(cur_ops.1, Ordering::Relaxed);
-                                        best_add.store(cur_ops.0, Ordering::Relaxed);
+                                        best_mul.store(cur_ops.multiplications, Ordering::Relaxed);
+                                        best_add.store(cur_ops.additions, Ordering::Relaxed);
                                         *best_scheme = cvars.clone();
                                     }
                                 }
@@ -1390,85 +1375,81 @@ impl<T: Eq + Hash + Clone + InternalOrdering> Expression<T> {
         }
     }
 
-    // Count the number of additions and multiplications in the expression, counting
+    // Count the number of operations in the expression, counting
     // subexpressions only once.
     pub fn count_operations_with_subexpression<'a>(
         &'a self,
         sub_expr: &mut HashMap<&'a Self, usize>,
-    ) -> (usize, usize) {
+    ) -> OperationCount {
         if matches!(
             self,
             Expression::Const(_, _) | Expression::Parameter(_, _) | Expression::ReadArg(_, _)
         ) {
-            return (0, 0);
+            return OperationCount::default();
         }
 
         if sub_expr.contains_key(self) {
-            return (0, 0);
+            return OperationCount::default();
         }
 
         sub_expr.insert(self, 1);
 
         match self {
-            Expression::Const(_, _) => (0, 0),
-            Expression::Parameter(_, _) => (0, 0),
+            Expression::Const(_, _) => OperationCount::default(),
+            Expression::Parameter(_, _) => OperationCount::default(),
             Expression::Eval(_, _, args) => {
-                let mut add = 0;
-                let mut mul = 0;
+                let mut count = OperationCount::default();
                 for arg in args {
-                    let (a, m) = arg.count_operations_with_subexpression(sub_expr);
-                    add += a;
-                    mul += m;
+                    count += arg.count_operations_with_subexpression(sub_expr);
                 }
-                (add, mul)
+                count
             }
             Expression::Add(_, a) => {
-                let mut add = 0;
-                let mut mul = 0;
+                let mut count = OperationCount::default();
                 for arg in a {
-                    let (a, m) = arg.count_operations_with_subexpression(sub_expr);
-                    add += a;
-                    mul += m;
+                    count += arg.count_operations_with_subexpression(sub_expr);
                 }
-                (add + a.len() - 1, mul)
+                count.additions += a.len() - 1;
+                count
             }
             Expression::Mul(_, m) => {
-                let mut add = 0;
-                let mut mul = 0;
+                let mut count = OperationCount::default();
                 for arg in m {
-                    let (a, m) = arg.count_operations_with_subexpression(sub_expr);
-                    add += a;
-                    mul += m;
+                    count += arg.count_operations_with_subexpression(sub_expr);
                 }
-                (add, mul + m.len() - 1)
+                count.multiplications += m.len() - 1;
+                count
             }
             Expression::Pow(_, p) => {
-                let (a, m) = p.0.count_operations_with_subexpression(sub_expr);
-                (a, m + p.1.unsigned_abs() as usize - 1)
+                let mut count = p.0.count_operations_with_subexpression(sub_expr);
+                count.add_integer_power(p.1);
+                count
             }
             Expression::Powf(_, p) => {
-                let (a, m) = p.0.count_operations_with_subexpression(sub_expr);
-                let (a2, m2) = p.1.count_operations_with_subexpression(sub_expr);
-                (a + a2, m + m2 + 1) // not clear how to count this
+                let mut count = p.0.count_operations_with_subexpression(sub_expr)
+                    + p.1.count_operations_with_subexpression(sub_expr);
+                count.add_function_call();
+                count
             }
-            Expression::ReadArg(_, _) => (0, 0),
-            Expression::BuiltinFun(_, _, b) => b.count_operations_with_subexpression(sub_expr), // not clear how to count this, third arg?
-            Expression::SubExpression(_, _) => (0, 0),
+            Expression::ReadArg(_, _) => OperationCount::default(),
+            Expression::BuiltinFun(_, _, b) => {
+                let mut count = b.count_operations_with_subexpression(sub_expr);
+                count.add_function_call();
+                count
+            }
+            Expression::SubExpression(_, _) => OperationCount::default(),
             Expression::Fun(_, _, _, a) => {
-                let mut add = 0;
-                let mut mul = 0;
+                let mut count = OperationCount::default();
                 for arg in a {
-                    let (a, m) = arg.count_operations_with_subexpression(sub_expr);
-                    add += a;
-                    mul += m;
+                    count += arg.count_operations_with_subexpression(sub_expr);
                 }
-                (add + a.len() - 1, mul)
+                count.add_function_call();
+                count
             }
             Expression::IfElse(_, b) => {
-                let (a1, m1) = b.0.count_operations_with_subexpression(sub_expr);
-                let (a2, m2) = b.1.count_operations_with_subexpression(sub_expr);
-                let (a3, m3) = b.2.count_operations_with_subexpression(sub_expr);
-                (a1 + a2 + a3, m1 + m2 + m3)
+                b.0.count_operations_with_subexpression(sub_expr)
+                    + b.1.count_operations_with_subexpression(sub_expr)
+                    + b.2.count_operations_with_subexpression(sub_expr)
             }
         }
     }
@@ -1857,11 +1838,8 @@ impl EvalTree<Complex<Rational>> {
             }
 
             if settings.verbose {
-                let (add_count, mul_count) = e.count_operations();
-                info!(
-                    "Removed {} common instructions: {} + and {} ×",
-                    r, add_count, mul_count
-                );
+                let count = e.count_operations();
+                info!("Removed {} common instructions: {}", r, count);
             }
         }
 
@@ -1873,11 +1851,8 @@ impl EvalTree<Complex<Rational>> {
             }
 
             if settings.verbose {
-                let (add_count, mul_count) = e.count_operations();
-                info!(
-                    "Removed {} common pairs: {} + and {} ×",
-                    r, add_count, mul_count
-                );
+                let count = e.count_operations();
+                info!("Removed {} common pairs: {}", r, count);
             }
         }
 
@@ -2299,11 +2274,8 @@ impl EvalTree<Complex<Rational>> {
         settings: &OptimizationSettings,
     ) -> ExpressionEvaluator<Complex<Rational>> {
         if settings.verbose {
-            let (n_add, n_mul) = self.count_operations();
-            info!(
-                "Initial ops: {} additions and {} multiplications",
-                n_add, n_mul
-            );
+            let count = self.count_operations();
+            info!("Initial ops: {}", count);
         }
 
         if settings.horner_iterations > 0 {
@@ -2813,21 +2785,18 @@ impl Expression<Complex<Rational>> {
             })
             .collect();
         let mut subexpr = HashMap::default();
-        let mut best_ops = (0, 0);
+        let mut best_ops = OperationCount::default();
         for h in &horner {
             let ops = h.count_operations_with_subexpression(&mut subexpr);
-            best_ops = (best_ops.0 + ops.0, best_ops.1 + ops.1);
+            best_ops += ops;
         }
 
         if settings.verbose {
-            info!(
-                "Initial Horner scheme ops: {} additions and {} multiplications",
-                best_ops.0, best_ops.1
-            );
+            info!("Initial Horner scheme ops: {}", best_ops);
         }
 
-        let best_mul = Arc::new(AtomicUsize::new(best_ops.1));
-        let best_add = Arc::new(AtomicUsize::new(best_ops.0));
+        let best_mul = Arc::new(AtomicUsize::new(best_ops.multiplications));
+        let best_add = Arc::new(AtomicUsize::new(best_ops.additions));
         let best_scheme = Arc::new(Mutex::new(vars.to_vec()));
 
         let n_iterations = settings.horner_iterations.max(1) - 1;
@@ -2914,49 +2883,53 @@ impl Expression<Complex<Rational>> {
                             })
                             .collect();
                         let mut subexpr = HashMap::default();
-                        let mut cur_ops = (0, 0);
+                        let mut cur_ops = OperationCount::default();
 
                         for h in &horner {
                             let ops = h.count_operations_with_subexpression(&mut subexpr);
-                            cur_ops = (cur_ops.0 + ops.0, cur_ops.1 + ops.1);
+                            cur_ops += ops;
                         }
 
                         // prefer fewer multiplications
-                        if cur_ops.1 <= last_mul || cur_ops.1 == last_mul && cur_ops.0 <= last_add {
+                        if cur_ops.multiplications <= last_mul
+                            || cur_ops.multiplications == last_mul && cur_ops.additions <= last_add
+                        {
                             if settings.verbose {
                                 info!(
-                                    "Accept move at step {}/{}: {} + and {} ×",
+                                    "Accept move at step {}/{}: {}",
                                     j,
                                     settings.horner_iterations / n_cores,
-                                    cur_ops.0,
-                                    cur_ops.1
+                                    cur_ops
                                 );
                             }
 
-                            last_add = cur_ops.0;
-                            last_mul = cur_ops.1;
+                            last_add = cur_ops.additions;
+                            last_mul = cur_ops.multiplications;
 
-                            if cur_ops.1 <= best_mul.load(Ordering::Relaxed)
-                                || cur_ops.1 == best_mul.load(Ordering::Relaxed)
-                                    && cur_ops.0 <= best_add.load(Ordering::Relaxed)
+                            if cur_ops.multiplications <= best_mul.load(Ordering::Relaxed)
+                                || cur_ops.multiplications == best_mul.load(Ordering::Relaxed)
+                                    && cur_ops.additions <= best_add.load(Ordering::Relaxed)
                             {
                                 let mut best_scheme = best_scheme.lock().unwrap();
 
                                 // check again if it is the best now that we have locked
                                 let best_mul_l = best_mul.load(Ordering::Relaxed);
                                 let best_add_l = best_add.load(Ordering::Relaxed);
-                                if cur_ops.1 <= best_mul_l
-                                    || cur_ops.1 == best_mul_l && cur_ops.0 <= best_add_l
+                                if cur_ops.multiplications <= best_mul_l
+                                    || cur_ops.multiplications == best_mul_l
+                                        && cur_ops.additions <= best_add_l
                                 {
-                                    if cur_ops.0 == best_add_l && cur_ops.1 == best_mul_l {
+                                    if cur_ops.additions == best_add_l
+                                        && cur_ops.multiplications == best_mul_l
+                                    {
                                         if *best_scheme < cvars {
                                             // on a draw, accept the lexicographical minimum
                                             // to get a deterministic scheme
                                             *best_scheme = cvars.clone();
                                         }
                                     } else {
-                                        best_mul.store(cur_ops.1, Ordering::Relaxed);
-                                        best_add.store(cur_ops.0, Ordering::Relaxed);
+                                        best_mul.store(cur_ops.multiplications, Ordering::Relaxed);
+                                        best_add.store(cur_ops.additions, Ordering::Relaxed);
                                         *best_scheme = cvars.clone();
                                     }
                                 }
@@ -3065,17 +3038,13 @@ impl<T: Clone + Default + std::fmt::Debug + Eq + std::hash::Hash + InternalOrder
         }
     }
 
-    pub fn count_operations(&self) -> (usize, usize) {
-        let mut add = 0;
-        let mut mul = 0;
+    pub fn count_operations(&self) -> OperationCount {
+        let mut count = OperationCount::default();
         for e in &self.functions {
-            let (ea, em) = e.2.count_operations();
-            add += ea;
-            mul += em;
+            count += e.2.count_operations();
         }
 
-        let (ea, em) = self.expressions.count_operations();
-        (add + ea, mul + em)
+        count + self.expressions.count_operations()
     }
 }
 
@@ -3237,88 +3206,76 @@ impl<T: Clone + Default + std::fmt::Debug + Eq + std::hash::Hash + InternalOrder
 impl<T: Clone + Default + std::fmt::Debug + Eq + std::hash::Hash + InternalOrdering>
     SplitExpression<T>
 {
-    pub fn count_operations(&self) -> (usize, usize) {
-        let mut add = 0;
-        let mut mul = 0;
+    pub fn count_operations(&self) -> OperationCount {
+        let mut count = OperationCount::default();
         for e in &self.subexpressions {
-            let (ea, em) = e.count_operations();
-            add += ea;
-            mul += em;
+            count += e.count_operations();
         }
 
         for e in &self.tree {
-            let (ea, em) = e.count_operations();
-            add += ea;
-            mul += em;
+            count += e.count_operations();
         }
 
-        (add, mul)
+        count
     }
 }
 
 impl<T: Clone + Default + std::fmt::Debug + Eq + std::hash::Hash + InternalOrdering> Expression<T> {
-    // Count the number of additions and multiplications in the expression.
-    pub fn count_operations(&self) -> (usize, usize) {
+    // Count the number of operations in the expression.
+    pub fn count_operations(&self) -> OperationCount {
         match self {
-            Expression::Const(_, _) => (0, 0),
-            Expression::Parameter(_, _) => (0, 0),
+            Expression::Const(_, _) => OperationCount::default(),
+            Expression::Parameter(_, _) => OperationCount::default(),
             Expression::Eval(_, _, args) => {
-                let mut add = 0;
-                let mut mul = 0;
+                let mut count = OperationCount::default();
                 for arg in args {
-                    let (a, m) = arg.count_operations();
-                    add += a;
-                    mul += m;
+                    count += arg.count_operations();
                 }
-                (add, mul)
+                count
             }
             Expression::Add(_, a) => {
-                let mut add = 0;
-                let mut mul = 0;
+                let mut count = OperationCount::default();
                 for arg in a {
-                    let (a, m) = arg.count_operations();
-                    add += a;
-                    mul += m;
+                    count += arg.count_operations();
                 }
-                (add + a.len() - 1, mul)
+                count.additions += a.len() - 1;
+                count
             }
             Expression::Mul(_, m) => {
-                let mut add = 0;
-                let mut mul = 0;
+                let mut count = OperationCount::default();
                 for arg in m {
-                    let (a, m) = arg.count_operations();
-                    add += a;
-                    mul += m;
+                    count += arg.count_operations();
                 }
-                (add, mul + m.len() - 1)
+                count.multiplications += m.len() - 1;
+                count
             }
             Expression::Pow(_, p) => {
-                let (a, m) = p.0.count_operations();
-                (a, m + p.1.unsigned_abs() as usize - 1)
+                let mut count = p.0.count_operations();
+                count.add_integer_power(p.1);
+                count
             }
             Expression::Powf(_, p) => {
-                let (a, m) = p.0.count_operations();
-                let (a2, m2) = p.1.count_operations();
-                (a + a2, m + m2 + 1) // not clear how to count this
+                let mut count = p.0.count_operations() + p.1.count_operations();
+                count.add_function_call();
+                count
             }
-            Expression::ReadArg(_, _) => (0, 0),
-            Expression::BuiltinFun(_, _, b) => b.count_operations(), // not clear how to count this, third arg?
-            Expression::SubExpression(_, _) => (0, 0),
+            Expression::ReadArg(_, _) => OperationCount::default(),
+            Expression::BuiltinFun(_, _, b) => {
+                let mut count = b.count_operations();
+                count.add_function_call();
+                count
+            }
+            Expression::SubExpression(_, _) => OperationCount::default(),
             Expression::Fun(_, _, _, args) => {
-                let mut add = 0;
-                let mut mul = 0;
+                let mut count = OperationCount::default();
                 for arg in args {
-                    let (a, m) = arg.count_operations();
-                    add += a;
-                    mul += m;
+                    count += arg.count_operations();
                 }
-                (add, mul)
+                count.add_function_call();
+                count
             }
             Expression::IfElse(_, b) => {
-                let (a1, m1) = b.0.count_operations();
-                let (a2, m2) = b.1.count_operations();
-                let (a3, m3) = b.2.count_operations();
-                (a1 + a2 + a3, m1 + m2 + m3)
+                b.0.count_operations() + b.1.count_operations() + b.2.count_operations()
             }
         }
     }
@@ -3419,7 +3376,6 @@ impl<T: Real> EvalTree<T> {
     }
 }
 
-/// Represents exported code that can be compiled with [Self::compile].
 impl<'a> AtomView<'a> {
     /// Convert nested expressions to a tree.
     pub fn to_evaluation_tree(

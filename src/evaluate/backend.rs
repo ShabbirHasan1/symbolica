@@ -1,5 +1,6 @@
 use super::*;
 
+/// Represents the exported code for a compiled function.
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[cfg_attr(feature = "bincode", derive(bincode::Encode, bincode::Decode))]
 #[derive(Debug, Clone)]
@@ -385,8 +386,9 @@ impl ExpressionEvaluator<Complex<Rational>> {
         &self,
         settings: JITCompilationSettings,
     ) -> Result<JITCompiledEvaluator<T>, String> {
-        let (instructions, _, constants) = self.export_instructions();
-        let constants = constants
+        let exported = self.export_instructions();
+        let constants = exported
+            .constants
             .into_iter()
             .map(|c| symjit::Complex::new(c.re.to_f64(), c.im.to_f64()))
             .collect::<Vec<_>>();
@@ -406,7 +408,7 @@ impl ExpressionEvaluator<Complex<Rational>> {
                 Ok(mapped)
             })
             .collect::<Result<Vec<_>, _>>()?;
-        T::jit_compile(instructions, constants, &external_fns, settings)
+        T::jit_compile(exported.instructions, constants, &external_fns, settings)
     }
 }
 
@@ -434,8 +436,9 @@ impl<T: JITCompiledNumber + Clone> ExpressionEvaluator<T> {
         &self,
         settings: JITCompilationSettings,
     ) -> Result<JITCompiledEvaluator<T>, String> {
-        let (instructions, _, constants) = self.export_instructions();
-        let constants = constants
+        let exported = self.export_instructions();
+        let constants = exported
+            .constants
             .into_iter()
             .map(|c| c.to_complex_f64())
             .collect::<Result<Vec<_>, _>>()?;
@@ -454,7 +457,7 @@ impl<T: JITCompiledNumber + Clone> ExpressionEvaluator<T> {
                 Ok(f.clone())
             })
             .collect::<Result<Vec<_>, _>>()?;
-        T::jit_compile(instructions, constants, &external_fns, settings)
+        T::jit_compile(exported.instructions, constants, &external_fns, settings)
     }
 }
 

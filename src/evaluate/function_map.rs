@@ -153,7 +153,7 @@ impl FunctionMap {
 }
 
 /// Builder for creating an [`ExpressionEvaluator`]. Constructed using
-/// [`Atom::evaluator_multiple`] or [`Atom::evaluator`].
+/// [`AtomCore::evaluator_multiple`] or [`AtomCore::evaluator`].
 ///
 /// Nested functions can be registerd using [`Self::add_function`] or [`Self::add_tagged_function`].
 /// The [`Self::build`] method finalizes the builder and returns an [`ExpressionEvaluator`].
