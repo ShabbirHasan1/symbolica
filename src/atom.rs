@@ -249,7 +249,7 @@ macro_rules! hide_namespace {
         $crate::atom::AtomCore::printer(
             &$e,
             $crate::printer::PrintOptions {
-                hide_namespace: Some($crate::namespace!()),
+                hide_namespace: Some($crate::namespace!().into()),
                 ..$crate::printer::PrintOptions::new()
             },
         )
@@ -1788,7 +1788,7 @@ impl Symbol {
         } else {
             if (!opts.hide_all_namespaces || opts.include_attributes)
                 && !State::is_fixed_builtin(*self)
-                && (opts.hide_namespace != Some(namespace) || opts.include_attributes)
+                && (opts.hide_namespace != Some(namespace.clone()) || opts.include_attributes)
             {
                 if opts.color_namespace && opts.mode.is_symbolica() {
                     f.write_fmt(format_args!(
