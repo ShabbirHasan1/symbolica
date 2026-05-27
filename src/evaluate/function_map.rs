@@ -1,3 +1,5 @@
+use crate::atom::InlineVar;
+
 use super::*;
 
 pub type EvalFnType<A, T> = Box<
@@ -47,7 +49,6 @@ impl<A, T> EvaluationFn<A, T> {
 )]
 #[derive(Clone, Debug)]
 pub struct FunctionMap {
-    pub(super) map: HashMap<Atom, Expr>,
     pub(super) tagged_fn_map: HashMap<(Symbol, Vec<Atom>), Expr>,
     pub(super) tag: HashMap<Symbol, usize>,
 }
@@ -62,13 +63,13 @@ impl FunctionMap {
     /// Create a new, empty function map.
     pub fn new() -> Self {
         FunctionMap {
-            map: HashMap::default(),
             tagged_fn_map: HashMap::default(),
             tag: HashMap::default(),
         }
     }
 
     /// Register a function. If `name` is a symbol, it will be treated as a regular function; if it is a function, its arguments will be treated as tags.
+    /// Only provide explicit arguments in `args` if they are meant to shadow function arguments from a higher scope.
     pub fn add_function<S: Into<Indeterminate>, A: Into<Indeterminate>>(
         &mut self,
         name: S,
@@ -91,6 +92,27 @@ impl FunctionMap {
         };
 
         self.add_tagged_function(name, tags, args, body)
+    }
+
+    /// Register a set of aliases (e.g. `s1 -> x^2+y`).
+    pub fn add_aliases(
+        &mut self,
+        aliases: impl IntoIterator<Item = (Atom, Atom)>,
+    ) -> Result<(), EvaluationError> {
+        for (from, to) in aliases {
+            self.add_function::<_, Indeterminate>(
+                match &from {
+                    Atom::Var(v) => {
+                        Indeterminate::Symbol(v.get_symbol(), InlineVar::from(v.get_symbol()))
+                    }
+                    Atom::Fun(f) => Indeterminate::Function(f.get_symbol(), from),
+                    _ => return Err(EvaluationError::NotIndeterminate { atom: from }),
+                },
+                vec![],
+                to,
+            )?;
+        }
+        Ok(())
     }
 
     /// Register a function, where the first arguments are `tags` instead of arguments.
@@ -134,11 +156,9 @@ impl FunctionMap {
     }
 
     pub(super) fn get(&self, a: AtomView) -> Option<&Expr> {
-        if let Some(c) = self.map.get(a.get_data()) {
-            return Some(c);
-        }
-
-        if let AtomView::Fun(aa) = a {
+        if let AtomView::Var(s) = a {
+            return self.tagged_fn_map.get(&(s.get_symbol(), vec![]));
+        } else if let AtomView::Fun(aa) = a {
             let s = aa.get_symbol();
             let tag_len = self.get_tag_len(&s);
 
@@ -224,6 +244,15 @@ impl<'a> EvaluatorBuilder<'a> {
         body: Atom,
     ) -> Result<Self, EvaluationError> {
         self.fn_map.add_tagged_function(name, tags, args, body)?;
+        Ok(self)
+    }
+
+    /// Register a set of aliases (e.g. `s1 -> x^2+y`).
+    pub fn add_aliases(
+        mut self,
+        aliases: impl IntoIterator<Item = (Atom, Atom)>,
+    ) -> Result<Self, EvaluationError> {
+        self.fn_map.add_aliases(aliases)?;
         Ok(self)
     }
 

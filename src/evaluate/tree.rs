@@ -3,6 +3,9 @@ use super::*;
 /// Errors that can occur while building or performing numerical expression evaluation.
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub enum EvaluationError {
+    NotIndeterminate {
+        atom: Atom,
+    },
     InvalidParameterCount {
         expected: usize,
         actual: usize,
@@ -64,6 +67,9 @@ impl std::error::Error for EvaluationError {}
 impl std::fmt::Display for EvaluationError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
+            EvaluationError::NotIndeterminate { atom } => {
+                write!(f, "atom is not indeterminate: {atom:?}")
+            }
             EvaluationError::InvalidParameterCount { expected, actual } => {
                 write!(
                     f,
@@ -515,7 +521,6 @@ impl<'a> AtomView<'a> {
                 &mut instr,
                 &mut subexpression,
                 &mut arg_stack,
-                0,
             )?;
             result_indices.push(res);
         }
@@ -655,10 +660,9 @@ impl<'a> AtomView<'a> {
         instr: &mut Vec<Instruction>,
         subexpressions: &mut HashMap<AtomView<'a>, Slot>,
         args: &mut Vec<(AtomView<'a>, Slot)>,
-        arg_start: usize,
     ) -> Result<Slot, EvaluationError> {
         if matches!(*self, AtomView::Var(_) | AtomView::Fun(_)) {
-            if let Some(p) = args.iter().skip(arg_start).find(|s| *self == s.0) {
+            if let Some(p) = args.iter().rev().find(|s| *self == s.0) {
                 return Ok(p.1);
             }
 
@@ -715,6 +719,20 @@ impl<'a> AtomView<'a> {
             }
             AtomView::Var(v) => {
                 let s = v.get_symbol();
+
+                if let Some(expr) = fn_map.get(*self) {
+                    return expr.body.as_view().linearize_impl(
+                        fn_map,
+                        params,
+                        constants,
+                        constant_map,
+                        external_functions,
+                        instr,
+                        subexpressions,
+                        args,
+                    );
+                }
+
                 if s.get_evaluation_info().is_some() {
                     let i = register_constant_external_container(
                         external_functions,
@@ -759,7 +777,6 @@ impl<'a> AtomView<'a> {
                         instr,
                         subexpressions,
                         args,
-                        arg_start,
                     )?;
 
                     let temp = Slot::Temp(instr.len());
@@ -795,7 +812,6 @@ impl<'a> AtomView<'a> {
                         instr,
                         subexpressions,
                         args,
-                        arg_start,
                     )?;
 
                     // try to resolve the condition if it is fully numeric
@@ -882,7 +898,6 @@ impl<'a> AtomView<'a> {
                                 instr,
                                 subexpressions,
                                 args,
-                                arg_start,
                             )?
                         } else {
                             else_branch.linearize_impl(
@@ -894,7 +909,6 @@ impl<'a> AtomView<'a> {
                                 instr,
                                 subexpressions,
                                 args,
-                                arg_start,
                             )?
                         };
 
@@ -915,7 +929,6 @@ impl<'a> AtomView<'a> {
                         instr,
                         &mut sub_expr_pos_child,
                         args,
-                        arg_start,
                     )?;
 
                     let label_end_pos = instr.len();
@@ -933,7 +946,6 @@ impl<'a> AtomView<'a> {
                         instr,
                         &mut sub_expr_pos_child,
                         args,
-                        arg_start,
                     )?;
 
                     instr[label_end_pos] = Instruction::Goto(instr.len());
@@ -983,7 +995,6 @@ impl<'a> AtomView<'a> {
                                 instr,
                                 subexpressions,
                                 args,
-                                arg_start,
                             )
                         })
                         .collect::<Result<_, _>>()?;
@@ -1034,7 +1045,6 @@ impl<'a> AtomView<'a> {
                             instr,
                             subexpressions,
                             args,
-                            arg_start,
                         )?;
 
                         if args.iter().any(|(a, _)| *a == arg_spec.as_view()) {
@@ -1067,7 +1077,6 @@ impl<'a> AtomView<'a> {
                             &mut sub_expr_pos_child
                         },
                         args,
-                        old_arg_stack_len,
                     )?;
 
                     args.truncate(old_arg_stack_len);
@@ -1086,7 +1095,6 @@ impl<'a> AtomView<'a> {
                     instr,
                     subexpressions,
                     args,
-                    arg_start,
                 )?;
 
                 if let AtomView::Num(n) = e
@@ -1127,7 +1135,6 @@ impl<'a> AtomView<'a> {
                     instr,
                     subexpressions,
                     args,
-                    arg_start,
                 )?;
 
                 let temp = Slot::Temp(instr.len());
@@ -1146,7 +1153,6 @@ impl<'a> AtomView<'a> {
                         instr,
                         subexpressions,
                         args,
-                        arg_start,
                     )?;
                     muls.push(a);
                 }
@@ -1169,7 +1175,6 @@ impl<'a> AtomView<'a> {
                         instr,
                         subexpressions,
                         args,
-                        arg_start,
                     )?);
                 }
 
@@ -3486,9 +3491,22 @@ impl<'a> AtomView<'a> {
                     })
                 }
             },
-            AtomView::Var(v) => Err(EvaluationError::UndefinedVariable {
-                symbol: v.get_symbol(),
-            }),
+            AtomView::Var(v) => {
+                if let Some(expr) = fn_map.get(*self) {
+                    return expr.body.as_view().to_eval_tree_impl(
+                        fn_map,
+                        params,
+                        args,
+                        fn_id_map,
+                        funcs,
+                        external_functions,
+                    );
+                }
+
+                Err(EvaluationError::UndefinedVariable {
+                    symbol: v.get_symbol(),
+                })
+            }
             AtomView::Fun(f) => {
                 let name = f.get_symbol();
                 if [
