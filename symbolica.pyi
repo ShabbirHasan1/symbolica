@@ -5461,6 +5461,26 @@ class Polynomial:
         Print the polynomial in a human-readable format.
         """
 
+    def format_plain(self) -> str:
+        """
+        Convert the polynomial into a plain string, useful for importing and exporting.
+        """
+
+    def _repr_html_(self) -> str:
+        """
+        Convert the polynomial into an HTML representation.
+        """
+
+    def _repr_latex_(self) -> str:
+        """
+        Convert the polynomial into a LaTeX representation.
+        """
+
+    def _repr_pretty_(self, pretty, cycle: bool):
+        """
+        Convert the polynomial into a pretty string representation.
+        """
+
     def to_latex(self) -> str:
         """
         Convert the polynomial into a LaTeX string.
@@ -6263,6 +6283,26 @@ class NumberFieldPolynomial:
         Print the polynomial in a human-readable format.
         """
 
+    def format_plain(self) -> str:
+        """
+        Convert the polynomial into a plain string, useful for importing and exporting.
+        """
+
+    def _repr_html_(self) -> str:
+        """
+        Convert the polynomial into an HTML representation.
+        """
+
+    def _repr_latex_(self) -> str:
+        """
+        Convert the polynomial into a LaTeX representation.
+        """
+
+    def _repr_pretty_(self, pretty, cycle: bool):
+        """
+        Convert the polynomial into a pretty string representation.
+        """
+
     def to_latex(self) -> str:
         """
         Convert the polynomial into a LaTeX string.
@@ -6906,6 +6946,26 @@ class FiniteFieldPolynomial:
     def __str__(self) -> str:
         """
         Print the polynomial in a human-readable format.
+        """
+
+    def format_plain(self) -> str:
+        """
+        Convert the polynomial into a plain string, useful for importing and exporting.
+        """
+
+    def _repr_html_(self) -> str:
+        """
+        Convert the polynomial into an HTML representation.
+        """
+
+    def _repr_latex_(self) -> str:
+        """
+        Convert the polynomial into a LaTeX representation.
+        """
+
+    def _repr_pretty_(self, pretty, cycle: bool):
+        """
+        Convert the polynomial into a pretty string representation.
         """
 
     def to_latex(self) -> str:
@@ -7576,6 +7636,26 @@ class RationalPolynomial:
         Print the rational polynomial in a human-readable format.
         """
 
+    def format_plain(self) -> str:
+        """
+        Convert the rational polynomial into a plain string, useful for importing and exporting.
+        """
+
+    def _repr_html_(self) -> str:
+        """
+        Convert the rational polynomial into an HTML representation.
+        """
+
+    def _repr_latex_(self) -> str:
+        """
+        Convert the rational polynomial into a LaTeX representation.
+        """
+
+    def _repr_pretty_(self, pretty, cycle: bool):
+        """
+        Convert the rational polynomial into a pretty string representation.
+        """
+
     def to_latex(self) -> str:
         """
         Convert the rational polynomial into a LaTeX string.
@@ -7864,6 +7944,26 @@ class FiniteFieldRationalPolynomial:
     def __str__(self) -> str:
         """
         Print the rational polynomial in a human-readable format.
+        """
+
+    def format_plain(self) -> str:
+        """
+        Convert the rational polynomial into a plain string, useful for importing and exporting.
+        """
+
+    def _repr_html_(self) -> str:
+        """
+        Convert the rational polynomial into an HTML representation.
+        """
+
+    def _repr_latex_(self) -> str:
+        """
+        Convert the rational polynomial into a LaTeX representation.
+        """
+
+    def _repr_pretty_(self, pretty, cycle: bool):
+        """
+        Convert the rational polynomial into a pretty string representation.
         """
 
     def to_latex(self) -> str:
@@ -8285,6 +8385,26 @@ class Matrix:
     def __str__(self) -> str:
         """
         Print the matrix in a human-readable format.
+        """
+
+    def format_plain(self) -> str:
+        """
+        Convert the matrix into a plain string, useful for importing and exporting.
+        """
+
+    def _repr_html_(self) -> str:
+        """
+        Convert the matrix into an HTML representation.
+        """
+
+    def _repr_latex_(self) -> str:
+        """
+        Convert the matrix into a LaTeX representation.
+        """
+
+    def _repr_pretty_(self, pretty, cycle: bool):
+        """
+        Convert the matrix into a pretty string representation.
         """
 
     def __eq__(self, other: Matrix) -> bool:
@@ -9662,6 +9782,11 @@ class Graph:
     def __str__(self) -> str:
         """
         Print the graph in a human-readable format.
+        """
+
+    def _repr_html_(self) -> str:
+        """
+        Convert the graph into an HTML Mermaid representation.
         """
 
     def __hash__(self) -> int:

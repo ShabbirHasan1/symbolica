@@ -206,6 +206,53 @@ impl PythonPolynomial {
             .format_string(&*DEFAULT_PRINT_OPTIONS, PrintState::new()))
     }
 
+    /// Convert the polynomial into a plain string, useful for importing and exporting.
+    pub fn format_plain(&self) -> PyResult<String> {
+        Ok(self
+            .poly
+            .format_string(&*PLAIN_PRINT_OPTIONS, PrintState::new()))
+    }
+
+    /// Convert the polynomial into an HTML representation.
+    pub fn _repr_html_(&self) -> PyResult<String> {
+        let formatted = self.poly.format_string(
+            &PrintOptions::new()
+                .max_line_length(Some(80))
+                .multiplication_operator('·')
+                .num_exp_as_superscript(true)
+                .max_terms(Some(100))
+                .color_mode(ColorMode::Always),
+            PrintState::new(),
+        );
+
+        Ok(crate::printer::AnsiHtmlFormatter::new(&formatted).to_string())
+    }
+
+    /// Convert the polynomial into a LaTeX representation.
+    pub fn _repr_latex_(&self) -> PyResult<String> {
+        self.to_latex()
+    }
+
+    /// Convert the polynomial into a pretty string representation.
+    pub fn _repr_pretty_(&self, pretty: &Bound<'_, PyAny>, cycle: bool) -> PyResult<()> {
+        let text = if cycle {
+            "...".to_string()
+        } else {
+            self.poly.format_string(
+                &PrintOptions::new()
+                    .max_line_length(Some(80))
+                    .multiplication_operator('·')
+                    .num_exp_as_superscript(true)
+                    .max_terms(Some(100))
+                    .color_mode(ColorMode::Always),
+                PrintState::new(),
+            )
+        };
+
+        pretty.call_method1("text", (text,))?;
+        Ok(())
+    }
+
     pub fn __pow__(&self, exponent: usize, modulo: Option<i64>) -> PyResult<PythonPolynomial> {
         if modulo.is_some() {
             return Err(exceptions::PyValueError::new_err(
@@ -984,7 +1031,7 @@ impl PythonPolynomial {
     /// >>>     print('({},{}): {}'.format(a, b, n))
     ///
     /// yields
-    /// ```
+    /// ```text
     /// (-56/45,-77/62): 1
     /// (-98/79,-119/96): 1
     /// (-119/96,-21/17): 1
@@ -1535,6 +1582,53 @@ impl PythonFiniteFieldPolynomial {
         Ok(self
             .poly
             .format_string(&*DEFAULT_PRINT_OPTIONS, PrintState::new()))
+    }
+
+    /// Convert the polynomial into a plain string, useful for importing and exporting.
+    pub fn format_plain(&self) -> PyResult<String> {
+        Ok(self
+            .poly
+            .format_string(&*PLAIN_PRINT_OPTIONS, PrintState::new()))
+    }
+
+    /// Convert the polynomial into an HTML representation.
+    pub fn _repr_html_(&self) -> PyResult<String> {
+        let formatted = self.poly.format_string(
+            &PrintOptions::new()
+                .max_line_length(Some(80))
+                .multiplication_operator('·')
+                .num_exp_as_superscript(true)
+                .max_terms(Some(100))
+                .color_mode(ColorMode::Always),
+            PrintState::new(),
+        );
+
+        Ok(crate::printer::AnsiHtmlFormatter::new(&formatted).to_string())
+    }
+
+    /// Convert the polynomial into a LaTeX representation.
+    pub fn _repr_latex_(&self) -> PyResult<String> {
+        self.to_latex()
+    }
+
+    /// Convert the polynomial into a pretty string representation.
+    pub fn _repr_pretty_(&self, pretty: &Bound<'_, PyAny>, cycle: bool) -> PyResult<()> {
+        let text = if cycle {
+            "...".to_string()
+        } else {
+            self.poly.format_string(
+                &PrintOptions::new()
+                    .max_line_length(Some(80))
+                    .multiplication_operator('·')
+                    .num_exp_as_superscript(true)
+                    .max_terms(Some(100))
+                    .color_mode(ColorMode::Always),
+                PrintState::new(),
+            )
+        };
+
+        pretty.call_method1("text", (text,))?;
+        Ok(())
     }
 
     pub fn __pow__(
@@ -2641,6 +2735,53 @@ impl PythonPrimeTwoPolynomial {
             .format_string(&*DEFAULT_PRINT_OPTIONS, PrintState::new()))
     }
 
+    /// Convert the polynomial into a plain string, useful for importing and exporting.
+    pub fn format_plain(&self) -> PyResult<String> {
+        Ok(self
+            .poly
+            .format_string(&*PLAIN_PRINT_OPTIONS, PrintState::new()))
+    }
+
+    /// Convert the polynomial into an HTML representation.
+    pub fn _repr_html_(&self) -> PyResult<String> {
+        let formatted = self.poly.format_string(
+            &PrintOptions::new()
+                .max_line_length(Some(80))
+                .multiplication_operator('·')
+                .num_exp_as_superscript(true)
+                .max_terms(Some(100))
+                .color_mode(ColorMode::Always),
+            PrintState::new(),
+        );
+
+        Ok(crate::printer::AnsiHtmlFormatter::new(&formatted).to_string())
+    }
+
+    /// Convert the polynomial into a LaTeX representation.
+    pub fn _repr_latex_(&self) -> PyResult<String> {
+        self.to_latex()
+    }
+
+    /// Convert the polynomial into a pretty string representation.
+    pub fn _repr_pretty_(&self, pretty: &Bound<'_, PyAny>, cycle: bool) -> PyResult<()> {
+        let text = if cycle {
+            "...".to_string()
+        } else {
+            self.poly.format_string(
+                &PrintOptions::new()
+                    .max_line_length(Some(80))
+                    .multiplication_operator('·')
+                    .num_exp_as_superscript(true)
+                    .max_terms(Some(100))
+                    .color_mode(ColorMode::Always),
+                PrintState::new(),
+            )
+        };
+
+        pretty.call_method1("text", (text,))?;
+        Ok(())
+    }
+
     pub fn __pow__(
         &self,
         exponent: usize,
@@ -3517,6 +3658,53 @@ impl PythonGaloisFieldPrimeTwoPolynomial {
         Ok(self
             .poly
             .format_string(&*DEFAULT_PRINT_OPTIONS, PrintState::new()))
+    }
+
+    /// Convert the polynomial into a plain string, useful for importing and exporting.
+    pub fn format_plain(&self) -> PyResult<String> {
+        Ok(self
+            .poly
+            .format_string(&*PLAIN_PRINT_OPTIONS, PrintState::new()))
+    }
+
+    /// Convert the polynomial into an HTML representation.
+    pub fn _repr_html_(&self) -> PyResult<String> {
+        let formatted = self.poly.format_string(
+            &PrintOptions::new()
+                .max_line_length(Some(80))
+                .multiplication_operator('·')
+                .num_exp_as_superscript(true)
+                .max_terms(Some(100))
+                .color_mode(ColorMode::Always),
+            PrintState::new(),
+        );
+
+        Ok(crate::printer::AnsiHtmlFormatter::new(&formatted).to_string())
+    }
+
+    /// Convert the polynomial into a LaTeX representation.
+    pub fn _repr_latex_(&self) -> PyResult<String> {
+        self.to_latex()
+    }
+
+    /// Convert the polynomial into a pretty string representation.
+    pub fn _repr_pretty_(&self, pretty: &Bound<'_, PyAny>, cycle: bool) -> PyResult<()> {
+        let text = if cycle {
+            "...".to_string()
+        } else {
+            self.poly.format_string(
+                &PrintOptions::new()
+                    .max_line_length(Some(80))
+                    .multiplication_operator('·')
+                    .num_exp_as_superscript(true)
+                    .max_terms(Some(100))
+                    .color_mode(ColorMode::Always),
+                PrintState::new(),
+            )
+        };
+
+        pretty.call_method1("text", (text,))?;
+        Ok(())
     }
 
     pub fn __pow__(
@@ -4499,6 +4687,53 @@ impl PythonGaloisFieldPolynomial {
             .format_string(&*DEFAULT_PRINT_OPTIONS, PrintState::new()))
     }
 
+    /// Convert the polynomial into a plain string, useful for importing and exporting.
+    pub fn format_plain(&self) -> PyResult<String> {
+        Ok(self
+            .poly
+            .format_string(&*PLAIN_PRINT_OPTIONS, PrintState::new()))
+    }
+
+    /// Convert the polynomial into an HTML representation.
+    pub fn _repr_html_(&self) -> PyResult<String> {
+        let formatted = self.poly.format_string(
+            &PrintOptions::new()
+                .max_line_length(Some(80))
+                .multiplication_operator('·')
+                .num_exp_as_superscript(true)
+                .max_terms(Some(100))
+                .color_mode(ColorMode::Always),
+            PrintState::new(),
+        );
+
+        Ok(crate::printer::AnsiHtmlFormatter::new(&formatted).to_string())
+    }
+
+    /// Convert the polynomial into a LaTeX representation.
+    pub fn _repr_latex_(&self) -> PyResult<String> {
+        self.to_latex()
+    }
+
+    /// Convert the polynomial into a pretty string representation.
+    pub fn _repr_pretty_(&self, pretty: &Bound<'_, PyAny>, cycle: bool) -> PyResult<()> {
+        let text = if cycle {
+            "...".to_string()
+        } else {
+            self.poly.format_string(
+                &PrintOptions::new()
+                    .max_line_length(Some(80))
+                    .multiplication_operator('·')
+                    .num_exp_as_superscript(true)
+                    .max_terms(Some(100))
+                    .color_mode(ColorMode::Always),
+                PrintState::new(),
+            )
+        };
+
+        pretty.call_method1("text", (text,))?;
+        Ok(())
+    }
+
     pub fn __pow__(
         &self,
         exponent: usize,
@@ -5425,6 +5660,53 @@ impl PythonNumberFieldPolynomial {
             .format_string(&*DEFAULT_PRINT_OPTIONS, PrintState::new()))
     }
 
+    /// Convert the polynomial into a plain string, useful for importing and exporting.
+    pub fn format_plain(&self) -> PyResult<String> {
+        Ok(self
+            .poly
+            .format_string(&*PLAIN_PRINT_OPTIONS, PrintState::new()))
+    }
+
+    /// Convert the polynomial into an HTML representation.
+    pub fn _repr_html_(&self) -> PyResult<String> {
+        let formatted = self.poly.format_string(
+            &PrintOptions::new()
+                .max_line_length(Some(80))
+                .multiplication_operator('·')
+                .num_exp_as_superscript(true)
+                .max_terms(Some(100))
+                .color_mode(ColorMode::Always),
+            PrintState::new(),
+        );
+
+        Ok(crate::printer::AnsiHtmlFormatter::new(&formatted).to_string())
+    }
+
+    /// Convert the polynomial into a LaTeX representation.
+    pub fn _repr_latex_(&self) -> PyResult<String> {
+        self.to_latex()
+    }
+
+    /// Convert the polynomial into a pretty string representation.
+    pub fn _repr_pretty_(&self, pretty: &Bound<'_, PyAny>, cycle: bool) -> PyResult<()> {
+        let text = if cycle {
+            "...".to_string()
+        } else {
+            self.poly.format_string(
+                &PrintOptions::new()
+                    .max_line_length(Some(80))
+                    .multiplication_operator('·')
+                    .num_exp_as_superscript(true)
+                    .max_terms(Some(100))
+                    .color_mode(ColorMode::Always),
+                PrintState::new(),
+            )
+        };
+
+        pretty.call_method1("text", (text,))?;
+        Ok(())
+    }
+
     pub fn __pow__(
         &self,
         exponent: usize,
@@ -6269,6 +6551,53 @@ impl PythonRationalPolynomial {
             .format_string(&*DEFAULT_PRINT_OPTIONS, PrintState::new()))
     }
 
+    /// Convert the polynomial into a plain string, useful for importing and exporting.
+    pub fn format_plain(&self) -> PyResult<String> {
+        Ok(self
+            .poly
+            .format_string(&*PLAIN_PRINT_OPTIONS, PrintState::new()))
+    }
+
+    /// Convert the rational polynomial into an HTML representation.
+    pub fn _repr_html_(&self) -> PyResult<String> {
+        let formatted = self.poly.format_string(
+            &PrintOptions::new()
+                .max_line_length(Some(80))
+                .multiplication_operator('·')
+                .num_exp_as_superscript(true)
+                .max_terms(Some(100))
+                .color_mode(ColorMode::Always),
+            PrintState::new(),
+        );
+
+        Ok(crate::printer::AnsiHtmlFormatter::new(&formatted).to_string())
+    }
+
+    /// Convert the rational polynomial into a LaTeX representation.
+    pub fn _repr_latex_(&self) -> PyResult<String> {
+        self.to_latex()
+    }
+
+    /// Convert the rational polynomial into a pretty string representation.
+    pub fn _repr_pretty_(&self, pretty: &Bound<'_, PyAny>, cycle: bool) -> PyResult<()> {
+        let text = if cycle {
+            "...".to_string()
+        } else {
+            self.poly.format_string(
+                &PrintOptions::new()
+                    .max_line_length(Some(80))
+                    .multiplication_operator('·')
+                    .num_exp_as_superscript(true)
+                    .max_terms(Some(100))
+                    .color_mode(ColorMode::Always),
+                PrintState::new(),
+            )
+        };
+
+        pretty.call_method1("text", (text,))?;
+        Ok(())
+    }
+
     /// Convert the rational polynomial into a LaTeX string.
     pub fn to_latex(&self) -> PyResult<String> {
         Ok(format!(
@@ -6648,6 +6977,53 @@ impl PythonFiniteFieldRationalPolynomial {
         Ok(self
             .poly
             .format_string(&*DEFAULT_PRINT_OPTIONS, PrintState::new()))
+    }
+
+    /// Convert the polynomial into a plain string, useful for importing and exporting.
+    pub fn format_plain(&self) -> PyResult<String> {
+        Ok(self
+            .poly
+            .format_string(&*PLAIN_PRINT_OPTIONS, PrintState::new()))
+    }
+
+    /// Convert the rational polynomial into an HTML representation.
+    pub fn _repr_html_(&self) -> PyResult<String> {
+        let formatted = self.poly.format_string(
+            &PrintOptions::new()
+                .max_line_length(Some(80))
+                .multiplication_operator('·')
+                .num_exp_as_superscript(true)
+                .max_terms(Some(100))
+                .color_mode(ColorMode::Always),
+            PrintState::new(),
+        );
+
+        Ok(crate::printer::AnsiHtmlFormatter::new(&formatted).to_string())
+    }
+
+    /// Convert the rational polynomial into a LaTeX representation.
+    pub fn _repr_latex_(&self) -> PyResult<String> {
+        self.to_latex()
+    }
+
+    /// Convert the rational polynomial into a pretty string representation.
+    pub fn _repr_pretty_(&self, pretty: &Bound<'_, PyAny>, cycle: bool) -> PyResult<()> {
+        let text = if cycle {
+            "...".to_string()
+        } else {
+            self.poly.format_string(
+                &PrintOptions::new()
+                    .max_line_length(Some(80))
+                    .multiplication_operator('·')
+                    .num_exp_as_superscript(true)
+                    .max_terms(Some(100))
+                    .color_mode(ColorMode::Always),
+                PrintState::new(),
+            )
+        };
+
+        pretty.call_method1("text", (text,))?;
+        Ok(())
     }
 
     /// Convert the rational polynomial into a LaTeX string.

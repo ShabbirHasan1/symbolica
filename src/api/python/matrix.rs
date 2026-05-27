@@ -549,6 +549,55 @@ impl PythonMatrix {
             .format_string(&*DEFAULT_PRINT_OPTIONS, PrintState::new()))
     }
 
+    /// Convert the matrix into a plain string, useful for importing and exporting.
+    pub fn format_plain(&self) -> PyResult<String> {
+        Ok(self
+            .matrix
+            .format_string(&*PLAIN_PRINT_OPTIONS, PrintState::new()))
+    }
+
+    /// Convert the matrix into an HTML representation.
+    pub fn _repr_html_(&self) -> PyResult<String> {
+        let formatted = self.matrix.format_string(
+            &PrintOptions::new()
+                .max_line_length(Some(80))
+                .multiplication_operator('·')
+                .num_exp_as_superscript(true)
+                .max_terms(Some(100))
+                .color_mode(ColorMode::Always)
+                .pretty_matrix(true),
+            PrintState::new(),
+        );
+
+        Ok(crate::printer::AnsiHtmlFormatter::new(&formatted).to_string())
+    }
+
+    /// Convert the matrix into a LaTeX representation.
+    pub fn _repr_latex_(&self) -> PyResult<String> {
+        self.to_latex()
+    }
+
+    /// Convert the matrix into a pretty string representation.
+    pub fn _repr_pretty_(&self, pretty: &Bound<'_, PyAny>, cycle: bool) -> PyResult<()> {
+        let text = if cycle {
+            "...".to_string()
+        } else {
+            self.matrix.format_string(
+                &PrintOptions::new()
+                    .max_line_length(Some(80))
+                    .multiplication_operator('·')
+                    .num_exp_as_superscript(true)
+                    .max_terms(Some(100))
+                    .color_mode(ColorMode::Always)
+                    .pretty_matrix(true),
+                PrintState::new(),
+            )
+        };
+
+        pretty.call_method1("text", (text,))?;
+        Ok(())
+    }
+
     /// Add this matrix to `rhs`, returning the result.
     pub fn __add__(&self, rhs: PythonMatrix) -> PyResult<PythonMatrix> {
         if self.matrix.nrows() != rhs.matrix.nrows() || self.matrix.ncols() != rhs.matrix.ncols() {

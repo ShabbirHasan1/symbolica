@@ -143,7 +143,7 @@ impl<T: fmt::Display> fmt::Display for AnsiWrap<T> {
 
 enum AnsiHtmlStyle {
     Reset,
-    Open { mode: u8, color: u8 },
+    Open { mode: u8, color: Option<u8> },
 }
 
 /// A wrapper around an ANSI escaped string that converts it to HTML color tags
@@ -158,30 +158,83 @@ impl<'a> AnsiHtmlFormatter<'a> {
         Self { formatted }
     }
 
+    /// Escape text that will be embedded into an HTML fragment.
+    pub fn escape_html(input: &str) -> String {
+        let mut out = String::with_capacity(input.len());
+
+        for c in input.chars() {
+            match c {
+                '&' => out.push_str("&amp;"),
+                '<' => out.push_str("&lt;"),
+                '>' => out.push_str("&gt;"),
+                '"' => out.push_str("&quot;"),
+                '\'' => out.push_str("&#39;"),
+                _ => out.push(c),
+            }
+        }
+
+        out
+    }
+
     fn parse_style(input: &str) -> Option<(AnsiHtmlStyle, &str)> {
         let sequence = input.strip_prefix("\u{1b}[")?;
         let sequence_end = sequence.find('m')?;
         let params = &sequence[..sequence_end];
         let rest = &sequence[sequence_end + 1..];
 
-        if params == "0" {
+        if params.is_empty() || params == "0" {
             return Some((AnsiHtmlStyle::Reset, rest));
         }
 
-        let mut parts = params.split(';');
-        let mode = parts.next()?.parse().ok()?;
+        let parts: Vec<u8> = params
+            .split(';')
+            .map(str::parse)
+            .collect::<Result<_, _>>()
+            .ok()?;
 
-        if parts.next()? != "38" || parts.next()? != "5" {
-            return None;
+        if parts.len() == 4 && parts[1] == 38 && parts[2] == 5 {
+            return Some((
+                AnsiHtmlStyle::Open {
+                    mode: parts[0],
+                    color: Some(parts[3]),
+                },
+                rest,
+            ));
         }
 
-        let color = parts.next()?.parse().ok()?;
+        let mut mode = 0;
+        let mut color = None;
+        let mut i = 0;
 
-        if parts.next().is_some() {
-            return None;
+        while i < parts.len() {
+            match parts[i] {
+                0 => {
+                    mode = 0;
+                    color = None;
+                }
+                1 => mode |= 1,
+                2 => mode |= 2,
+                3 => mode |= 4,
+                22 => mode &= !(1 | 2),
+                23 => mode &= !4,
+                30..=37 => color = Some(parts[i] - 30),
+                39 => color = None,
+                90..=97 => color = Some(parts[i] - 90 + 8),
+                38 if i + 2 < parts.len() && parts[i + 1] == 5 => {
+                    color = Some(parts[i + 2]);
+                    i += 2;
+                }
+                _ => {}
+            }
+
+            i += 1;
         }
 
-        Some((AnsiHtmlStyle::Open { mode, color }, rest))
+        if mode == 0 && color.is_none() {
+            Some((AnsiHtmlStyle::Reset, rest))
+        } else {
+            Some((AnsiHtmlStyle::Open { mode, color }, rest))
+        }
     }
 
     fn write_escaped<W: Write>(html: &mut W, text: &str) -> fmt::Result {
@@ -197,24 +250,47 @@ impl<'a> AnsiHtmlFormatter<'a> {
         Ok(())
     }
 
-    fn write_span<W: Write>(html: &mut W, mode: u8, color: u8) -> fmt::Result {
-        let (red, green, blue) = Self::xterm_color(color);
+    fn write_span<W: Write>(html: &mut W, mode: u8, color: Option<u8>) -> fmt::Result {
+        html.write_str("<span")?;
 
-        write!(html, "<span style=\"color: rgb({red}, {green}, {blue})")?;
+        if mode != 0 || color.is_some() {
+            html.write_str(" style=\"")?;
 
-        if mode & 1 != 0 {
-            html.write_str("; font-weight: bold")?;
+            let mut needs_separator = false;
+
+            if let Some(color) = color {
+                let (red, green, blue) = Self::xterm_color(color);
+                write!(html, "color: rgb({red}, {green}, {blue})")?;
+                needs_separator = true;
+            }
+
+            if mode & 1 != 0 {
+                if needs_separator {
+                    html.write_str("; ")?;
+                }
+                html.write_str("font-weight: bold")?;
+                needs_separator = true;
+            }
+
+            if mode & 2 != 0 {
+                if needs_separator {
+                    html.write_str("; ")?;
+                }
+                html.write_str("opacity: 0.65")?;
+                needs_separator = true;
+            }
+
+            if mode & 4 != 0 {
+                if needs_separator {
+                    html.write_str("; ")?;
+                }
+                html.write_str("font-style: italic")?;
+            }
+
+            html.write_str("\"")?;
         }
 
-        if mode & 2 != 0 {
-            html.write_str("; opacity: 0.65")?;
-        }
-
-        if mode & 4 != 0 {
-            html.write_str("; font-style: italic")?;
-        }
-
-        html.write_str("\">")
+        html.write_str(">")
     }
 
     fn xterm_color(color: u8) -> (u8, u8, u8) {
@@ -2236,6 +2312,7 @@ mod test {
             AnsiHtmlFormatter::new("a<&b").to_string(),
             "<div style=\"white-space: pre-wrap; margin: 0;\">a&lt;&amp;b</div>"
         );
+        assert_eq!(AnsiHtmlFormatter::escape_html("a\"b'c"), "a&quot;b&#39;c");
     }
 
     #[test]
@@ -2243,6 +2320,14 @@ mod test {
         assert_eq!(
             AnsiHtmlFormatter::new("a\u{1b}[0;38;5;3m+\u{1b}[0mb").to_string(),
             "<div style=\"white-space: pre-wrap; margin: 0;\">a<span style=\"color: rgb(205, 205, 0)\">+</span>b</div>"
+        );
+    }
+
+    #[test]
+    fn ansi_html_converts_standard_sgr_color_spans() {
+        assert_eq!(
+            AnsiHtmlFormatter::new("[[\u{1b}[1;95mt\u{1b}[0m]]").to_string(),
+            "<div style=\"white-space: pre-wrap; margin: 0;\">[[<span style=\"color: rgb(255, 0, 255); font-weight: bold\">t</span>]]</div>"
         );
     }
 

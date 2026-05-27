@@ -17,7 +17,7 @@ use crate::domains::rational::{Fraction, FractionField, FractionNormalization, Q
 use crate::domains::{
     Derivable, EuclideanDomain, Field, InternalOrdering, Ring, RingOps, SelfRing, Set,
 };
-use crate::printer::{PrintOptions, PrintState};
+use crate::printer::{AtomPrinter, PrintOptions, PrintState};
 
 use super::gcd::PolynomialGCD;
 use super::univariate::UnivariatePolynomial;
@@ -968,6 +968,10 @@ impl<F: Ring, E: Exponent, O: MonomialOrder> SelfRing for MultivariatePolynomial
                         write!(f, "^{{{e}}}")?;
                     } else if opts.double_star_for_exponentiation {
                         write!(f, "**{e}")?;
+                    } else if opts.mode.is_symbolica() && opts.num_exp_as_superscript {
+                        state.superscript = true;
+                        AtomPrinter::format_digits(e.to_string(), opts, &state, f)?;
+                        state.superscript = false;
                     } else {
                         write!(f, "^{e}")?;
                     }

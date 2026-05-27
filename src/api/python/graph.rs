@@ -1,5 +1,8 @@
 use super::*;
 
+static MERMAID_REPR_COUNTER: std::sync::atomic::AtomicUsize =
+    std::sync::atomic::AtomicUsize::new(0);
+
 /// Represents a part of an edge that connects to one vertex. It can be directed or undirected.
 #[cfg_attr(feature = "python_stubgen", gen_stub_pyclass)]
 #[pyclass(from_py_object, name = "HalfEdge", module = "symbolica.core")]
@@ -74,6 +77,89 @@ impl PythonGraph {
     /// Print the graph in a human-readable format.
     fn __str__(&self) -> String {
         format!("{}", self.graph)
+    }
+
+    /// Convert the graph into an HTML Mermaid representation.
+    fn _repr_html_(&self) -> String {
+        let diagram = crate::printer::AnsiHtmlFormatter::escape_html(&self.graph.to_mermaid());
+        let id = MERMAID_REPR_COUNTER.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+        let id_attr = format!("symbolica-mermaid-{id}");
+
+        format!(
+            r##"<div id="{id_attr}-container" class="symbolica-mermaid-container">
+<style>
+#{id_attr}-container .mermaid {{
+  background: transparent;
+}}
+
+@media (prefers-color-scheme: dark) {{
+  #{id_attr}-container svg {{
+    background: transparent !important;
+  }}
+
+  #{id_attr}-container .node rect,
+  #{id_attr}-container .node circle,
+  #{id_attr}-container .node ellipse,
+  #{id_attr}-container .node polygon,
+  #{id_attr}-container .node path {{
+    fill: #f8fafc !important;
+    stroke: #a78bfa !important;
+    stroke-width: 1.5px !important;
+  }}
+
+  #{id_attr}-container .nodeLabel,
+  #{id_attr}-container .nodeLabel p,
+  #{id_attr}-container .node text {{
+    color: #111827 !important;
+    fill: #111827 !important;
+  }}
+
+  #{id_attr}-container .edgePath path,
+  #{id_attr}-container .flowchart-link {{
+    stroke: #cbd5e1 !important;
+    stroke-width: 1.8px !important;
+  }}
+
+  #{id_attr}-container marker path,
+  #{id_attr}-container .arrowheadPath {{
+    fill: #cbd5e1 !important;
+    stroke: #cbd5e1 !important;
+  }}
+
+  #{id_attr}-container .edgeLabel,
+  #{id_attr}-container .edgeLabel p {{
+    color: #f8fafc !important;
+    background-color: #111827 !important;
+  }}
+
+  #{id_attr}-container .edgeLabel rect,
+  #{id_attr}-container .labelBkg {{
+    fill: #111827 !important;
+    background-color: #111827 !important;
+  }}
+}}
+</style>
+<div id="{id_attr}" class="mermaid">
+{diagram}</div>
+</div>
+<script type="module">
+import mermaid from "https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.esm.min.mjs";
+mermaid.initialize({{
+  startOnLoad: false,
+  theme: "base",
+  themeVariables: {{
+    background: "transparent",
+    mainBkg: "#f8fafc",
+    primaryColor: "#f8fafc",
+    primaryBorderColor: "#8b5cf6",
+    primaryTextColor: "#111827",
+    lineColor: "#64748b",
+    edgeLabelBackground: "#f8fafc"
+  }}
+}});
+mermaid.run({{ querySelector: "#{id_attr}" }}).catch(() => {{}});
+</script>"##
+        )
     }
 
     /// Hash the graph.
