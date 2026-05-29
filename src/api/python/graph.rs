@@ -205,7 +205,7 @@ mermaid.run({{ querySelector: "#{id_attr}" }}).catch(() => {{}});
     /// >>> from symbolica import *
     /// >>> g, q, gh = HalfEdge(S("g")), HalfEdge(S("q"), True), HalfEdge(S("gh"), True)
     /// >>> graphs = Graph.generate(
-    /// >>>     external_nodes=[(1, g), (2, g)],
+    /// >>>     external_edges=[(1, g), (2, g)],
     /// >>>     vertex_signatures=[[g, g, g], [g, g, g, g],
     /// >>>                        [q.flip(), q, g], [gh.flip(), gh, g]],
     /// >>>     max_loops=2,
@@ -218,7 +218,7 @@ mermaid.run({{ querySelector: "#{id_attr}" }}).catch(() => {{}});
     ///
     /// Parameters
     /// ----------
-    /// external_nodes: Sequence[tuple[Expression | int, HalfEdge]]
+    /// external_edges: Sequence[tuple[Expression | int, HalfEdge]]
     ///     The external edges, consisting of a tuple of the node data and a tuple of the edge direction and edge data.
     ///     If the node data is the same, flip symmetries will be recognized.
     /// vertex_signatures: Sequence[Sequence[HalfEdge]]

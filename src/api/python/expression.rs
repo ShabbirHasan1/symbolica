@@ -144,6 +144,11 @@ impl PythonHeldExpression {
     }
 
     /// Add this transformer to `other`, returning the result.
+    ///
+    /// Parameters
+    /// ----------
+    /// rhs: HeldExpression | Expression | int | float | complex | Decimal
+    ///     The other operand to combine or compare with.
     pub fn __add__(&self, rhs: ConvertibleToPattern) -> PyResult<PythonHeldExpression> {
         let res = Workspace::get_local().with(|workspace| {
             Ok::<Pattern, PyErr>(self.expr.add(&rhs.to_pattern()?.expr, workspace))
@@ -153,22 +158,42 @@ impl PythonHeldExpression {
     }
 
     /// Add this transformer to `other`, returning the result.
+    ///
+    /// Parameters
+    /// ----------
+    /// rhs: HeldExpression | Expression | int | float | complex | Decimal
+    ///     The other operand to combine or compare with.
     pub fn __radd__(&self, rhs: ConvertibleToPattern) -> PyResult<PythonHeldExpression> {
         self.__add__(rhs)
     }
 
-    ///  Subtract `other` from this transformer, returning the result.
+    /// Subtract `other` from this transformer, returning the result.
+    ///
+    /// Parameters
+    /// ----------
+    /// rhs: HeldExpression | Expression | int | float | complex | Decimal
+    ///     The other operand to combine or compare with.
     pub fn __sub__(&self, rhs: ConvertibleToPattern) -> PyResult<PythonHeldExpression> {
         self.__add__(ConvertibleToPattern::Held(rhs.to_pattern()?.__neg__()?))
     }
 
-    ///  Subtract this transformer from `other`, returning the result.
+    /// Subtract this transformer from `other`, returning the result.
+    ///
+    /// Parameters
+    /// ----------
+    /// rhs: HeldExpression | Expression | int | float | complex | Decimal
+    ///     The other operand to combine or compare with.
     pub fn __rsub__(&self, rhs: ConvertibleToPattern) -> PyResult<PythonHeldExpression> {
         rhs.to_pattern()?
             .__add__(ConvertibleToPattern::Held(self.__neg__()?))
     }
 
     /// Add this transformer to `other`, returning the result.
+    ///
+    /// Parameters
+    /// ----------
+    /// rhs: HeldExpression | Expression | int | float | complex | Decimal
+    ///     The other operand to combine or compare with.
     pub fn __mul__(&self, rhs: ConvertibleToPattern) -> PyResult<PythonHeldExpression> {
         let res = Workspace::get_local().with(|workspace| {
             Ok::<Pattern, PyErr>(self.expr.mul(&rhs.to_pattern()?.expr, workspace))
@@ -178,11 +203,21 @@ impl PythonHeldExpression {
     }
 
     /// Add this transformer to `other`, returning the result.
+    ///
+    /// Parameters
+    /// ----------
+    /// rhs: HeldExpression | Expression | int | float | complex | Decimal
+    ///     The other operand to combine or compare with.
     pub fn __rmul__(&self, rhs: ConvertibleToPattern) -> PyResult<PythonHeldExpression> {
         self.__mul__(rhs)
     }
 
     /// Divide this transformer by `other`, returning the result.
+    ///
+    /// Parameters
+    /// ----------
+    /// rhs: HeldExpression | Expression | int | float | complex | Decimal
+    ///     The other operand to combine or compare with.
     pub fn __truediv__(&self, rhs: ConvertibleToPattern) -> PyResult<PythonHeldExpression> {
         let res = Workspace::get_local().with(|workspace| {
             Ok::<Pattern, PyErr>(self.expr.div(&rhs.to_pattern()?.expr, workspace))
@@ -192,12 +227,22 @@ impl PythonHeldExpression {
     }
 
     /// Divide `other` by this transformer, returning the result.
+    ///
+    /// Parameters
+    /// ----------
+    /// rhs: HeldExpression | Expression | int | float | complex | Decimal
+    ///     The other operand to combine or compare with.
     pub fn __rtruediv__(&self, rhs: ConvertibleToPattern) -> PyResult<PythonHeldExpression> {
         rhs.to_pattern()?
             .__truediv__(ConvertibleToPattern::Held(self.clone()))
     }
 
     /// Take `self` to power `exp`, returning the result.
+    ///
+    /// Parameters
+    /// ----------
+    /// exponent: HeldExpression | Expression | int | float | complex | Decimal
+    ///     The exponent.
     pub fn __pow__(
         &self,
         exponent: ConvertibleToPattern,
@@ -217,6 +262,11 @@ impl PythonHeldExpression {
     }
 
     /// Take `base` to power `self`, returning the result.
+    ///
+    /// Parameters
+    /// ----------
+    /// base: HeldExpression | Expression | int | float | complex | Decimal
+    ///     The base expression.
     pub fn __rpow__(
         &self,
         base: ConvertibleToPattern,
@@ -227,6 +277,11 @@ impl PythonHeldExpression {
     }
 
     /// Returns a warning that `**` should be used instead of `^` for taking a power.
+    ///
+    /// Parameters
+    /// ----------
+    /// rhs: Any
+    ///     The operand passed with `^`; use `**` for exponentiation instead.
     pub fn __xor__(&self, _rhs: Py<PyAny>) -> PyResult<PythonHeldExpression> {
         Err(exceptions::PyTypeError::new_err(
             "Cannot xor an expression. Did you mean to write a power? Use ** instead, i.e. x**2",
@@ -234,6 +289,11 @@ impl PythonHeldExpression {
     }
 
     /// Returns a warning that `**` should be used instead of `^` for taking a power.
+    ///
+    /// Parameters
+    /// ----------
+    /// rhs: Any
+    ///     The operand passed with `^`; use `**` for exponentiation instead.
     pub fn __rxor__(&self, _rhs: Py<PyAny>) -> PyResult<PythonHeldExpression> {
         Err(exceptions::PyTypeError::new_err(
             "Cannot xor an expression. Did you mean to write a power? Use ** instead, i.e. x**2",
@@ -426,15 +486,24 @@ impl PythonTransformer {
         })
     }
 
-    /// Create a transformer that expands products and powers.
+    /// Create a transformer that expands products and powers. Optionally, expand in `var` only.
+    ///
+    /// Using `via_poly=True` may give a significant speedup for large expressions.
     ///
     /// Examples
     /// --------
-    /// >>> from symbolica import Expression, Transformer
+    /// >>> from symbolica import *
     /// >>> x, x_ = S('x', 'x_')
     /// >>> f = S('f')
     /// >>> e = f((x+1)**2).replace(f(x_), x_.hold(T().expand()))
     /// >>> print(e)
+    ///
+    /// Parameters
+    /// ----------
+    /// var: Expression | None
+    ///     The variable to expand with respect to. If omitted, expand all variables.
+    /// via_poly: bool | None
+    ///     Whether the operation should use an intermediate polynomial representation.
     #[pyo3(signature = (var = None, via_poly = None))]
     pub fn expand(
         &self,
@@ -515,11 +584,16 @@ impl PythonTransformer {
     ///
     /// Examples
     /// --------
-    /// >>> from symbolica import Expression, T
+    /// >>> from symbolica import *
     /// >>> x__ = S('x__')
     /// >>> f = S('f')
     /// >>> e = f(2,3,4).replace(f(x__), x__.hold(T().nargs()))
     /// >>> print(e)
+    ///
+    /// Parameters
+    /// ----------
+    /// only_for_arg_fun: bool
+    ///     Whether the transformer should only count arguments of `arg(...)`.
     #[pyo3(signature = (only_for_arg_fun = false))]
     pub fn nargs(&self, only_for_arg_fun: bool) -> PyResult<PythonTransformer> {
         self.append_transformer(Transformer::ArgCount(only_for_arg_fun))
@@ -530,12 +604,15 @@ impl PythonTransformer {
     ///
     /// Examples
     /// --------
-    /// >>> from symbolica import Expression, T
+    ///
+    /// >>> from symbolica import *
     /// >>> x, y, z, w, f, x__ = S('x', 'y', 'z', 'w', 'f', 'x__')
     /// >>> e = f(x+y, 4*z*w+3).replace(f(x__), f(x__).hold(T().linearize([z])))
-    /// >>> print(e)
-    ///
-    /// yields `f(x,3)+f(y,3)+4*z*f(x,w)+4*z*f(y,w)`.
+    /// >>> print(e)  # f(x,3)+f(y,3)+4*z*f(x,w)+4*z*f(y,w)
+    /// Parameters
+    /// ----------
+    /// symbols: Sequence[Expression] | None
+    ///     The symbols to linearize with respect to.
     #[pyo3(signature = (symbols = None))]
     pub fn linearize(&self, symbols: Option<Vec<PythonExpression>>) -> PyResult<PythonTransformer> {
         let mut c_symbols = vec![];
@@ -639,14 +716,25 @@ impl PythonTransformer {
     ///
     /// Examples
     /// --------
-    /// >>> from symbolica import Expression, T
+    /// >>> from symbolica import *
     /// >>> x_, f_id, g_id = S('x__', 'f', 'g')
     /// >>> f = S('f')
     /// >>> e = f(1,2,1,3).replace(f(x_), x_.hold(T().partitions([(f_id, 2), (g_id, 1), (f_id, 1)])))
     /// >>> print(e)
     ///
     /// yields:
-    /// `2*f(1)*f(1,2)*g(3)+2*f(1)*f(1,3)*g(2)+2*f(1)*f(2,3)*g(1)+f(2)*f(1,1)*g(3)+2*f(2)*f(1,3)*g(1)+f(3)*f(1,1)*g(2)+2*f(3)*f(1,2)*g(1)`
+    /// ```
+    /// 2*f(1)*f(1,2)*g(3)+2*f(1)*f(1,3)*g(2)+2*f(1)*f(2,3)*g(1)+f(2)*f(1,1)*g(3)+2*f(2)*f(1,3)*g(1)+f(3)*f(1,1)*g(2)+2*f(3)*f(1,2)*g(1)
+    /// ```
+    ///
+    /// Parameters
+    /// ----------
+    /// bins: Sequence[tuple[Transformer | Expression, int]]
+    ///     The output bins and their required lengths.
+    /// fill_last: bool
+    ///     Whether any remaining elements should be placed in the last bin.
+    /// repeat: bool
+    ///     Whether the transformation should be applied repeatedly until it no longer changes the expression.
     #[pyo3(signature = (bins, fill_last = false, repeat = false))]
     pub fn partitions(
         &self,
@@ -685,14 +773,21 @@ impl PythonTransformer {
     ///
     /// Examples
     /// --------
-    /// >>> from symbolica import Expression, T
+    /// >>> from symbolica import *
     /// >>> x_, f_id = S('x__', 'f')
     /// >>> f = S('f')
     /// >>> e = f(1,2,1,2).replace(f(x_), x_.hold(T().permutations(f_id)))
     /// >>> print(e)
     ///
     /// yields:
-    /// `4*f(1,1,2,2)+4*f(1,2,1,2)+4*f(1,2,2,1)+4*f(2,1,1,2)+4*f(2,1,2,1)+4*f(2,2,1,1)`
+    /// ```
+    /// 4*f(1,1,2,2)+4*f(1,2,1,2)+4*f(1,2,2,1)+4*f(2,1,1,2)+4*f(2,1,2,1)+4*f(2,2,1,1)
+    /// ```
+    ///
+    /// Parameters
+    /// ----------
+    /// function_name: Transformer | Expression
+    ///     The function symbol used to wrap each generated permutation.
     pub fn permutations(&self, function_name: ConvertibleToPattern) -> PyResult<PythonTransformer> {
         let id = match &function_name.to_pattern()?.expr {
             Pattern::Literal(x) => {
@@ -715,15 +810,20 @@ impl PythonTransformer {
         self.append_transformer(Transformer::Permutations(id))
     }
 
-    /// Create a transformer that apply a function `f`.
+    /// Create a transformer that applies a Python function.
     ///
     /// Examples
     /// --------
-    /// >>> from symbolica import Expression, T
+    /// >>> from symbolica import *
     /// >>> x_ = S('x_')
     /// >>> f = S('f')
     /// >>> e = f(2).replace(f(x_), x_.hold(T().map(lambda r: r**2)))
     /// >>> print(e)
+    ///
+    /// Parameters
+    /// ----------
+    /// f: Callable[[Expression], Expression | int | float | complex | Decimal]
+    ///     The callback or function to apply.
     pub fn map(
         &self,
         #[gen_stub(override_type(
@@ -761,7 +861,7 @@ impl PythonTransformer {
         self.append_transformer(transformer)
     }
 
-    /// Map a chain of transformers over the terms of the expression, optionally using multiple cores.
+    /// Map a chain of transformer over the terms of the expression, optionally using multiple cores.
     ///
     /// Examples
     /// --------
@@ -769,6 +869,13 @@ impl PythonTransformer {
     /// >>> x, y = S('x', 'y')
     /// >>> t = T().map_terms(T().print(), n_cores=2)
     /// >>> e = t(x + y)
+    ///
+    /// Parameters
+    /// ----------
+    /// transformers: Transformer
+    ///     The transformers to chain or apply.
+    /// n_cores: int
+    ///     The number of CPU cores used to map over terms.
     #[pyo3(signature = (*transformers, n_cores=1))]
     pub fn map_terms(
         &self,
@@ -805,10 +912,16 @@ impl PythonTransformer {
     ///
     /// Examples
     /// --------
-    /// >>> from symbolica import Expression, T
+    /// >>> from symbolica import *
     /// >>> x = S('x')
     /// >>> f = S('f')
-    /// >>> e = (1+x).hold(T().split().for_each(T().map(f)))()
+    /// >>> t = T().split().for_each(T().map(f))
+    /// >>> e = t(1+x)
+    ///
+    /// Parameters
+    /// ----------
+    /// transformers: Transformer
+    ///     The transformers to chain or apply.
     #[pyo3(signature = (*transformers))]
     pub fn for_each(&self, transformers: &Bound<'_, PyTuple>) -> PyResult<PythonTransformer> {
         let mut rep_chain = vec![];
@@ -840,18 +953,25 @@ impl PythonTransformer {
         self.append_transformer(transformer)
     }
 
-    /// Create a transformer that keeps executing the transformer chain until the input equals the output.
+    /// Create a transformer that repeatedly executes the arguments in order
+    /// until there are no more changes.
+    /// The output from one transformer is inserted into the next.
     ///
     /// Examples
     /// --------
-    /// >>> from symbolica import Expression
+    /// >>> from symbolica import *
     /// >>> x_ = S('x_')
     /// >>> f = S('f')
-    /// >>> e = E("f(5)")
-    /// >>> e = e.hold(T().repeat(
+    /// >>> t = T().repeat(
     /// >>>     T().expand(),
     /// >>>     T().replace(f(x_), f(x_ - 1) + f(x_ - 2), x_.req_gt(1))
-    /// >>> ))()
+    /// >>> )
+    /// >>> e = t(f(5))
+    ///
+    /// Parameters
+    /// ----------
+    /// transformers: Transformer
+    ///     The transformers to chain or apply.
     #[pyo3(signature = (*transformers))]
     pub fn repeat(&self, transformers: &Bound<'_, PyTuple>) -> PyResult<PythonTransformer> {
         let mut rep_chain = vec![];
@@ -869,10 +989,19 @@ impl PythonTransformer {
     ///
     /// Examples
     /// --------
-    /// >>> t = T.map_terms(T.if_then(T.contains(x), T.print()))
+    /// >>> t = T().map_terms(T().if_then(T().contains(x), T().print()))
     /// >>> t(x + y + 4)
     ///
     /// prints `x`.
+    ///
+    /// Parameters
+    /// ----------
+    /// condition: Condition
+    ///     The condition to evaluate.
+    /// if_block: Transformer
+    ///     The transformer to apply when the condition is true.
+    /// else_block: Transformer | None
+    ///     The transformer to apply when the condition is false.
     #[pyo3(signature = (condition, if_block, else_block = None))]
     pub fn if_then(
         &self,
@@ -893,14 +1022,23 @@ impl PythonTransformer {
     ///
     /// Examples
     /// --------
-    /// >>> t = T.map_terms(T.if_changed(T.replace(x, y), T.print()))
+    /// >>> t = T().map_terms(T().if_changed(T().replace(x, y), T().print()))
     /// >>> print(t(x + y + 4))
     ///
     /// prints
-    /// ```log
+    /// ```
     /// y
     /// 2*y+4
     /// ```
+    ///
+    /// Parameters
+    /// ----------
+    /// condition: Transformer
+    ///     The condition to evaluate.
+    /// if_block: Transformer
+    ///     The transformer to apply when the condition is true.
+    /// else_block: Transformer | None
+    ///     The transformer to apply when the condition is false.
     #[pyo3(signature = (condition, if_block, else_block = None))]
     pub fn if_changed(
         &self,
@@ -936,14 +1074,20 @@ impl PythonTransformer {
     ///
     /// Examples
     /// --------
-    /// >>> from symbolica import Expression, T
+    /// >>> from symbolica import *
     /// >>> x_ = S('x_')
     /// >>> f = S('f')
     /// >>> e = E("f(5)")
-    /// >>> e = e.hold(T().repeat(
+    /// >>> t = T().chain(
     /// >>>     T().expand(),
-    /// >>>     T().replace(f(x_), f(x_ - 1) + f(x_ - 2), x_.req_gt(1))
-    /// >>> ))()
+    /// >>>     T().replace(f(x_), f(5))
+    /// >>> )
+    /// >>> e = t(f(5))
+    ///
+    /// Parameters
+    /// ----------
+    /// transformers: Transformer
+    ///     The transformers to chain or apply.
     #[pyo3(signature = (*transformers))]
     pub fn chain(&self, transformers: &Bound<'_, PyTuple>) -> PyResult<PythonTransformer> {
         let mut r = self.clone();
@@ -1208,6 +1352,11 @@ impl PythonTransformer {
     }
 
     /// Create a transformer that collects terms involving the literal occurrence of `x`.
+    ///
+    /// Parameters
+    /// ----------
+    /// x: Expression
+    ///     The variable whose coefficient should be extracted.
     pub fn coefficient(&self, x: ConvertibleToExpression) -> PyResult<PythonTransformer> {
         let a = x.to_expression().expr;
         self.append_transformer(Transformer::Map(Box::new(move |i, _state, o| {
@@ -1217,6 +1366,11 @@ impl PythonTransformer {
     }
 
     /// Create a transformer that computes the partial fraction decomposition in `x`.
+    ///
+    /// Parameters
+    /// ----------
+    /// x: Expression
+    ///     The variable with respect to which to perform the partial-fraction decomposition.
     pub fn apart(&self, x: PythonExpression) -> PyResult<PythonTransformer> {
         self.append_transformer(Transformer::Map(Box::new(move |i, _state, o| {
             let poly = i
@@ -1289,6 +1443,11 @@ impl PythonTransformer {
     }
 
     /// Create a transformer that derives `self` w.r.t the variable `x`.
+    ///
+    /// Parameters
+    /// ----------
+    /// x: HeldExpression | Expression
+    ///     The variable with respect to which to differentiate.
     pub fn derivative(&self, x: PythonExpression) -> PyResult<PythonTransformer> {
         let id = x.expr.try_into().map_err(|e| {
             exceptions::PyValueError::new_err(format!(
@@ -1313,6 +1472,19 @@ impl PythonTransformer {
     /// >>> print(e)
     ///
     /// yields `f(0)+x*der(1,f,0)+1/2*x^2*(der(2,f,0)+4*y)`.
+    ///
+    /// Parameters
+    /// ----------
+    /// x: Expression
+    ///     The variable around which the series is expanded.
+    /// expansion_point: Expression | int | float | complex | Decimal
+    ///     The point around which the series should be expanded.
+    /// depth: int
+    ///     The numerator of the expansion depth.
+    /// depth_denom: int
+    ///     The denominator of the fractional expansion depth.
+    /// depth_is_absolute: bool
+    ///     Whether the requested depth is measured as an absolute order instead of relative to the leading term.
     #[pyo3(signature = (x, expansion_point, depth, depth_denom = 1, depth_is_absolute = true))]
     pub fn series(
         &self,
@@ -1339,7 +1511,7 @@ impl PythonTransformer {
         ))
     }
 
-    /// Create a transformer that replaces all subexpressions matching the pattern `pat` by the right-hand side `rhs`.
+    /// Create a transformer that replaces all subexpressions matching the pattern `lhs` by the right-hand side `rhs`.
     ///
     /// Examples
     /// --------
@@ -1352,23 +1524,38 @@ impl PythonTransformer {
     ///
     /// Parameters
     /// ----------
-    /// pat:
+    /// lhs:
     ///     The pattern to match.
     /// rhs:
     ///     The right-hand side to replace the matched subexpression with. Can be a transformer, expression or a function that maps a dictionary of wildcards to an expression.
-    /// cond:
+    /// cond: PatternRestriction | Condition, optional
     ///     Conditions on the pattern.
-    /// non_greedy_wildcards:
+    /// non_greedy_wildcards: Sequence[Expression], optional
     ///     Wildcards that try to match as little as possible.
+    /// min_level: int, optional
+    ///     The minimum level at which the pattern is allowed to match. The first level is 0 and the level is increased when going into a function or one level deeper in the expression tree, depending on `level_is_tree_depth`.
+    /// max_level: int | None, optional
+    ///     The maximum level at which the pattern is allowed to match. `None` means no maximum.
     /// level_range:
     ///     Specifies the `[min,max]` level at which the pattern is allowed to match. The first level is 0 and the level is increased when going into a function or one level deeper in the expression tree, depending on `level_is_tree_depth`.
-    /// level_is_tree_depth:
+    ///     Prefer setting `min_level` and `max_level` directly over `level_range`, as this argument will be deprecated in the future.
+    /// level_is_tree_depth: bool, optional
     ///     If set to `True`, the level is increased when going one level deeper in the expression tree.
-    /// allow_new_wildcards_on_rhs:
+    /// partial: bool, optional
+    ///     If set to `True`, allow the pattern to match to a part of a term. For example, with `partial=True`, the pattern `x+y` matches to `x+2+y`.
+    /// allow_new_wildcards_on_rhs: bool, optional
     ///     If set to `True`, allow wildcards that do not appear in the pattern on the right-hand side.
     /// rhs_cache_size: int, optional
     ///     Cache the first `rhs_cache_size` substituted patterns. If set to `None`, an internally determined cache size is used.
     ///     **Warning**: caching should be disabled (`rhs_cache_size=0`) if the right-hand side contains side effects, such as updating a global variable.
+    /// once: bool, optional
+    ///     If set to `True`, only the first match will be replaced, instead of all non-overlapping matches.
+    /// bottom_up: bool, optional
+    ///     Replace deepest nested matches first instead of replacing the outermost matches first.
+    ///     For example, replacing `f(x_)` with `x_^2` in `f(f(x))` would yield `f(x)^2` with the default settings and `f(x^2)` with bottom-up replacement.
+    /// nested: bool, optional
+    ///     Replace nested matches, starting from the deepest first and acting on the result of that replacement.
+    ///     For example, replacing `f(x_)` with `x_^2` in `f(f(x))` would yield `f(x)^2` with the default settings and `f(x^2)^2` with nested replacement.
     #[pyo3(signature = (lhs, rhs, cond = None, non_greedy_wildcards = None, min_level=0, max_level=None, level_range = None, level_is_tree_depth = false, partial=true, allow_new_wildcards_on_rhs = false, rhs_cache_size = None, once = false, bottom_up = false, nested = false))]
     pub fn replace(
         &self,
@@ -1451,8 +1638,20 @@ impl PythonTransformer {
     /// --------
     ///
     /// >>> x, y, f = S('x', 'y', 'f')
-    /// >>> e = f(x,y)
-    /// >>> r = e.hold(T().replace_multiple([Replacement(x, y), Replacement(y, x)]))
+    /// >>> t = T().replace_multiple([Replacement(x, y), Replacement(y, x)])
+    /// >>> r = t(f(x,y))
+    /// >>> print(r)
+    ///
+    /// Parameters
+    /// ----------
+    /// replacements: Sequence[Replacement]
+    ///     The replacements to apply.
+    /// once: bool
+    ///     Whether only the first matching replacement should be applied.
+    /// bottom_up: bool
+    ///     Whether the transformation should traverse the expression from leaves to root.
+    /// nested: bool
+    ///     Whether matches created by replacements may be matched again inside the same pass.
     #[pyo3(signature = (replacements, once = false, bottom_up = false, nested = false))]
     pub fn replace_multiple(
         &self,
@@ -1475,7 +1674,52 @@ impl PythonTransformer {
     ///
     /// Examples
     /// --------
-    /// >>> E('f(10)').hold(T().print(terms_on_new_line = True))()
+    /// >>> T().print(terms_on_new_line = True)
+    ///
+    /// Parameters
+    /// ----------
+    /// mode: PrintMode
+    ///     The mode that controls how the input is interpreted or formatted.
+    /// max_line_length: int | None
+    ///     The preferred maximum line length before wrapping.
+    /// indentation: int
+    ///     The number of spaces used for wrapped lines.
+    /// fill_indented_lines: bool
+    ///     Whether wrapped lines should be padded to the configured indentation.
+    /// terms_on_new_line: bool
+    ///     Whether wrapped output should place terms on separate lines.
+    /// color_top_level_sum: bool
+    ///     Whether top-level sums should be colorized.
+    /// color_builtin_symbols: bool
+    ///     Whether built-in symbols should be colorized.
+    /// bracket_level_colors: Sequence[int] | None
+    ///     The colors assigned to successive nested bracket levels.
+    /// print_ring: bool
+    ///     Whether the coefficient ring should be included in the printed output.
+    /// symmetric_representation_for_finite_field: bool
+    ///     Whether finite-field elements should be printed using symmetric representatives.
+    /// explicit_rational_polynomial: bool
+    ///     Whether rational polynomials should be printed explicitly as numerator and denominator.
+    /// number_thousands_separator: str | None
+    ///     The separator inserted between groups of digits in printed integers.
+    /// multiplication_operator: str
+    ///     The string used to print multiplication.
+    /// double_star_for_exponentiation: bool
+    ///     Whether exponentiation should be printed as `**` instead of `^`.
+    /// function_brackets: tuple[str, str]
+    ///     The opening and closing brackets used when printing function arguments.
+    /// num_exp_as_superscript: bool
+    ///     Whether small integer exponents should be printed as superscripts.
+    /// show_namespaces: bool
+    ///     Whether namespaces should be included in the formatted output.
+    /// hide_namespace: str | None
+    ///     A namespace prefix to omit from printed symbol names.
+    /// include_attributes: bool
+    ///     Whether symbol attributes should be included in the printed output.
+    /// max_terms: int | None
+    ///     The maximum number of terms to print before truncating the output.
+    /// custom_print_mode: dict[str, int | str | dict[str | int, Any]] | None
+    ///     Custom print data passed through to custom print callbacks.
     #[pyo3(signature =
         (mode = PythonPrintMode::Symbolica,
             max_line_length = Some(80),
@@ -1566,18 +1810,29 @@ impl PythonTransformer {
     ///
     /// Examples
     /// --------
-    /// >>> from symbolica import Expression
+    /// >>> from symbolica import *
     /// >>> x_ = S('x_')
     /// >>> f = S('f')
-    /// >>> e = E("f(5)")
-    /// >>> e = e.hold(T().stats('replace', T().replace(f(x_), 1)))()
+    /// >>> t = T().stats('replace', T().replace(f(x_), 1)).execute()
+    /// >>> t(eE('f(5)'))
     ///
     /// yields
-    /// ```log
+    /// ```
     /// Stats for replace:
     ///     In  │ 1 │  10.00 B │
     ///     Out │ 1 │   3.00 B │ ⧗ 40.15µs
     /// ```
+    ///
+    /// Parameters
+    /// ----------
+    /// tag: str
+    ///     The tag to test or require.
+    /// transformer: Transformer
+    ///     The transformer whose statistics should be recorded.
+    /// color_medium_change_threshold: float | None
+    ///     The percentage change threshold that should be highlighted as a medium change.
+    /// color_large_change_threshold: float | None
+    ///     The percentage change threshold that should be highlighted as a large change.
     #[pyo3(signature =
         (tag,
             transformer,
@@ -2456,9 +2711,139 @@ impl PythonExpression {
     /// >>>     },
     /// >>> )
 
+    /// Create new symbols from `names`. Symbols can have attributes,
+    /// such as symmetries. If no attributes
+    /// are specified and the symbol was previously defined, the attributes are inherited.
+    /// Once attributes are defined on a symbol, they cannot be redefined later.
+    ///
+    /// Examples
+    /// --------
+    /// Define a regular symbol and use it as a variable:
+    /// >>> x = S('x')
+    /// >>> e = x**2 + 5
+    /// >>> print(e)  # x**2 + 5
+    ///
+    /// Define a regular symbol and use it as a function:
+    /// >>> f = S('f')
+    /// >>> e = f(1,2)
+    /// >>> print(e)  # f(1,2)
+    ///
+    ///
+    /// Define a symmetric function:
+    /// >>> f = S('f', is_symmetric=True)
+    /// >>> e = f(2,1)
+    /// >>> print(e)  # f(1,2)
+    ///
+    ///
+    /// Define a linear and symmetric function:
+    /// >>> p1, p2, p3, p4 = S('p1', 'p2', 'p3', 'p4')
+    /// >>> dot = S('dot', is_symmetric=True, is_linear=True)
+    /// >>> e = dot(p2+2*p3,p1+3*p2-p3)
+    /// dot(p1,p2)+2*dot(p1,p3)+3*dot(p2,p2)-dot(p2,p3)+6*dot(p2,p3)-2*dot(p3,p3)
+    ///
+    /// Define a custom normalization function:
+    /// >>> e = S('real_log', normalization=T().replace(E("x_(exp(x1_))"), E("x1_")))
+    /// >>> E("real_log(exp(x)) + real_log(5)")
+    ///
+    /// Define a custom print function:
+    /// >>> def print_mu(mu: Expression, latex: bool, **kwargs) -> str | None:
+    /// >>>     if latex:
+    /// >>>         if mu.get_type() == AtomType.Fn:
+    /// >>>             return "\\mu_{" + ",".join(a.format() for a in mu) + "}"
+    /// >>>         else:
+    /// >>>             return "\\mu"
+    /// >>> mu = S("mu", print=print_mu)
+    /// >>> expr = E("mu + mu(1,2)")
+    /// >>> print(expr.to_latex())
+    ///
+    /// If the function returns `None`, the default print function is used.
+    ///
+    /// Define a custom derivative function:
+    /// >>> tag = S('tag', derivative=lambda f, index: f)
+    /// >>> x = S('x')
+    /// >>> tag(3, x).derivative(x)
+    ///
+    /// Define a custom series function that returns the principal part and the regular part,
+    /// or `None` if a standard construction through the derivative can be used:
+    /// >>> def inv_series(args: Sequence[Series]) -> tuple[Expression, Expression] | None:
+    /// >>>     return (N(0), args[0].pow(-1).to_expression())
+    /// >>>
+    /// >>> t = S('t')
+    /// >>> inv = S('inv', series=inv_series)
+    ///
+    /// Define a function with a custom evaluation:
+    /// >>> cosh = S(
+    /// >>>     "my_cosh",
+    /// >>>     eval={
+    /// >>>         "float": lambda args: math.cosh(args[0]),
+    /// >>>         "complex": lambda args: cmath.cosh(args[0]),
+    /// >>>         "cpp": "template<typename T> T python_my_cosh(T a) { return std::cosh(a); }",
+    /// >>>     },
+    /// >>> )
+    ///
     /// Add custom data to a symbol:
     /// >>> x = S('x', data={'my_tag': 'my_value'})
     /// >>> r = x.get_symbol_data('my_tag')
+    ///
+    /// Parameters
+    /// ----------
+    /// *names : str
+    ///     The name of the symbol
+    /// is_symmetric : bool | None
+    ///     Set to true if the symbol is symmetric.
+    /// is_antisymmetric : bool | None
+    ///     Set to true if the symbol is antisymmetric.
+    /// is_cyclesymmetric : bool | None
+    ///     Set to true if the symbol is cyclesymmetric.
+    /// is_linear : bool | None
+    ///     Set to true if the symbol is linear.
+    /// is_scalar : bool | None
+    ///     Set to true if the symbol is a scalar. It will be moved out of linear functions.
+    /// is_real : bool | None
+    ///     Set to true if the symbol is a real number.
+    /// is_integer : bool | None
+    ///     Set to true if the symbol is an integer.
+    /// is_positive : bool | None
+    ///     Set to true if the symbol is a positive number.
+    /// tags: Sequence[str] | None
+    ///     A list of tags to associate with the symbol.
+    /// aliases: Sequence[str] | None
+    ///     A list of aliases to associate with the symbol.
+    /// normalization : Transformer | None
+    ///     A transformer that is called after every normalization. Note that the symbol
+    ///     name cannot be used in the transformer as this will lead to a definition of the
+    ///     symbol. Use a wildcard with the same attributes instead.
+    /// print : Callable[..., str | None] | None:
+    ///     A function that is called when printing the variable/function, which is provided as its first argument.
+    ///     This function should return a string, or `None` if the default print function should be used.
+    ///     The custom print function takes in keyword arguments that are the same as the arguments of the `format` function.
+    /// derivative: Callable[[Expression, int], Expression] | None:
+    ///     A function that is called when computing the derivative of a function in a given argument.
+    /// series: Callable[[Sequence[Series]], tuple[Expression, Expression] | None] | None:
+    ///     A function that is called for custom series expansion. It receives the argument series and can return
+    ///     the singular factor and regularized expression, or `None` to use the default series expansion.
+    /// eval: dict[str, Any] | None:
+    ///     Numeric evaluation function(s). The dictionary may contain:
+    ///     - `tag_count: int`: the number of leading symbolic tag arguments.
+    ///     - `cpp: str`: a C++ function definition inserted into exported C++ code for this symbol.
+    ///
+    ///     For arbitrary precision evaluation of constant functions, register a function that
+    ///     maps the tags and the requested decimal precision to a number:
+    ///     - `constant`: (Sequence[Expression], int) -> Decimal | float | complex | tuple[Decimal, Decimal]]
+    ///
+    ///     Evaluators for non-constant functions when `tag_count = 0`:
+    ///     - `float`: Sequence[float] -> float
+    ///     - `complex`: Sequence[complex] -> complex
+    ///     - `decimal`: Sequence[Decimal] -> Decimal
+    ///     - `decimal_complex`: Sequence[tuple[Decimal, Decimal]] -> tuple[Decimal, Decimal]
+    ///
+    ///     Evaluators for non-constant functions when `tag_count > 0` are generators:
+    ///     - `float`: Sequence[Expression] -> (Sequence[float] -> float)
+    ///     - `complex`: Sequence[Expression] -> (Sequence[complex] -> complex)
+    ///     - `decimal`: Sequence[Expression] -> (Sequence[Decimal] -> Decimal)
+    ///     - `decimal_complex`: Sequence[Expression] -> (Sequence[tuple[Decimal, Decimal]] -> tuple[Decimal, Decimal])
+    /// data: str | int | Expression | bytes | list | dict | None = None
+    ///     Custom user data to associate with the symbol.
     #[gen_stub(skip)]
     #[pyo3(signature = (*names,is_symmetric=None,is_antisymmetric=None,is_cyclesymmetric=None,is_linear=None,is_scalar=None,is_real=None,is_integer=None,is_positive=None,tags=None,aliases=None,normalization=None, print=None, derivative=None, series=None, eval=None, data=None))]
     #[classmethod]
@@ -2755,15 +3140,14 @@ impl PythonExpression {
         }
     }
 
-    /// Create a new Symbolica number from an int, a float, a Decimal, or a string.
+    /// Create a new Symbolica number from an int, a float, or a string.
     /// A floating point number is kept as a float with the same precision as the input,
     /// but it can also be converted to the smallest rational number given a `relative_error`.
     ///
     /// Examples
     /// --------
     /// >>> e = Expression.num(1) / 2
-    /// >>> print(e)
-    /// 1/2
+    /// >>> print(e)  # 1/2
     ///
     /// >>> print(Expression.num(1/3))
     /// >>> print(Expression.num(0.33, 0.1))
@@ -2773,6 +3157,13 @@ impl PythonExpression {
     /// 1/3
     /// 3.33e-1
     /// 1.2340e-1
+    ///
+    /// Parameters
+    /// ----------
+    /// num: int | float | complex | str | Decimal
+    ///     The value to convert into a Symbolica number.
+    /// relative_error: float | None
+    ///     The maximum relative error used when converting floating-point input to a rational number.
     #[pyo3(signature = (num, relative_error = None))]
     #[classmethod]
     pub fn num(
@@ -3099,11 +3490,69 @@ impl PythonExpression {
     }
 
     /// Convert the expression into a human-readable string, with tunable settings.
+    /// Use `formatted` instead if you need rich output for interactive notebooks.
     ///
     /// Examples
     /// --------
     /// >>> a = E('128378127123 z^(2/3)*w^2/x/y + y^4 + z^34 + x^(x+2)+3/5+f(x,x^2)')
     /// >>> print(a.format(number_thousands_separator='_', multiplication_operator=' '))
+    ///
+    /// Yields `z³⁴+x^(x+2)+y⁴+f(x,x²)+128_378_127_123 z^(2/3) w² x⁻¹ y⁻¹+3/5`.
+    ///
+    /// >>> print(E('x^2 + f(x)').format(PrintMode.Sympy))
+    ///
+    /// yields `x**2+f(x)`
+    ///
+    /// >>> print(E('x^2 + f(x)').format(PrintMode.Mathematica))
+    ///
+    /// yields `x^2 + f[x]`
+    ///
+    /// Parameters
+    /// ----------
+    /// max_terms: int | None
+    ///     The maximum number of terms to print before truncating the output.
+    /// mode: PrintMode
+    ///     The mode that controls how the input is interpreted or formatted.
+    /// max_line_length: int | None
+    ///     The preferred maximum line length before wrapping.
+    /// indentation: int
+    ///     The number of spaces used for wrapped lines.
+    /// fill_indented_lines: bool
+    ///     Whether wrapped lines should be padded to the configured indentation.
+    /// terms_on_new_line: bool
+    ///     Whether wrapped output should place terms on separate lines.
+    /// color_top_level_sum: bool
+    ///     Whether top-level sums should be colorized.
+    /// color_builtin_symbols: bool
+    ///     Whether built-in symbols should be colorized.
+    /// bracket_level_colors: Sequence[int] | None
+    ///     The colors assigned to successive nested bracket levels.
+    /// print_ring: bool
+    ///     Whether the coefficient ring should be included in the printed output.
+    /// symmetric_representation_for_finite_field: bool
+    ///     Whether finite-field elements should be printed using symmetric representatives.
+    /// explicit_rational_polynomial: bool
+    ///     Whether rational polynomials should be printed explicitly as numerator and denominator.
+    /// number_thousands_separator: str | None
+    ///     The separator inserted between groups of digits in printed integers.
+    /// multiplication_operator: str
+    ///     The string used to print multiplication.
+    /// double_star_for_exponentiation: bool
+    ///     Whether exponentiation should be printed as `**` instead of `^`.
+    /// function_brackets: tuple[str, str]
+    ///     The opening and closing brackets used when printing function arguments.
+    /// num_exp_as_superscript: bool
+    ///     Whether small integer exponents should be printed as superscripts.
+    /// precision: int | None
+    ///     The number of digits to use when printing approximate numbers.
+    /// show_namespaces: bool
+    ///     Whether namespaces should be included in the formatted output.
+    /// hide_namespace: str | None
+    ///     A namespace prefix to omit from printed symbol names.
+    /// include_attributes: bool
+    ///     Whether symbol attributes should be included in the printed output.
+    /// custom_print_mode: dict[str, int | str | dict[str | int, Any]] | None
+    ///     Custom print data passed through to custom print callbacks.
     #[pyo3(signature =
         (max_terms = Some(100),
             mode = PythonPrintMode::Symbolica,
@@ -3327,6 +3776,11 @@ impl PythonExpression {
     /// >>> print(a.to_latex())
     ///
     /// Yields `$$z^{34}+x^{x+2}+y^{4}+f(x,x^{2})+128378127123 z^{\\frac{2}{3}} w^{2} \\frac{1}{x} \\frac{1}{y}+\\frac{3}{5}$$`.
+    ///
+    /// Parameters
+    /// ----------
+    /// max_line_length: int | None
+    ///     The preferred maximum line length before wrapping top-level sums.
     #[pyo3(signature = (max_line_length = None))]
     pub fn to_latex(&self, max_line_length: Option<usize>) -> PyResult<String> {
         Ok(self.format_latex_with_options(
@@ -3348,6 +3802,11 @@ impl PythonExpression {
     /// >>> print(a.to_typst())
     ///
     /// Yields ```(2 op("f")(3+2𝑖+"x"))/"x"```.
+    ///
+    /// Parameters
+    /// ----------
+    /// show_namespaces: bool
+    ///     Whether namespaces should be included in the formatted output.
     #[pyo3(signature = (show_namespaces = false))]
     pub fn to_typst(&self, show_namespaces: bool) -> PyResult<String> {
         Ok(format!(
@@ -3375,9 +3834,14 @@ impl PythonExpression {
     /// Examples
     /// --------
     /// >>> a = E('cos(x+2i + 3)+sqrt(conj(x)) + test::y')
-    /// >>> print(a.to_mathematica())
+    /// >>> print(a.to_mathematica(show_namespaces=True))
     ///
     /// Yields ```test`y+Cos[x+3+2I]+Sqrt[Conjugate[x]]```.
+    ///
+    /// Parameters
+    /// ----------
+    /// show_namespaces: bool
+    ///     Whether namespaces should be included in the formatted output.
     #[pyo3(signature = (show_namespaces = true))]
     pub fn to_mathematica(&self, show_namespaces: bool) -> PyResult<String> {
         Ok(format!(
@@ -3400,12 +3864,19 @@ impl PythonExpression {
     /// Save the expression and its state to a binary file.
     /// The data is compressed and the compression level can be set between 0 and 11.
     ///
-    /// The expression can be loaded using `Expression.load`.
+    /// The data can be loaded using `Expression.load`.
     ///
     /// Examples
     /// --------
     /// >>> e = E("f(x)+f(y)").expand()
     /// >>> e.save('export.dat')
+    ///
+    /// Parameters
+    /// ----------
+    /// filename: str
+    ///     The file path to load from or save to.
+    /// compression_level: int
+    ///     The compression level for serialized output.
     #[pyo3(signature = (filename, compression_level=9))]
     pub fn save(&self, filename: &str, compression_level: u32) -> PyResult<()> {
         let f = File::create(filename)
@@ -3445,6 +3916,13 @@ impl PythonExpression {
     /// print(e)
     ///
     /// will yield `f(x_new)+f(y)`.
+    ///
+    /// Parameters
+    /// ----------
+    /// filename: str
+    ///     The file path to load from or save to.
+    /// conflict_fn: Callable[[str], str] | None
+    ///     A callback that resolves symbol conflicts during loading.
     #[pyo3(signature = (filename, conflict_fn=None))]
     #[classmethod]
     pub fn load(
@@ -3531,6 +4009,17 @@ impl PythonExpression {
     /// is a variable or function, otherwise throw an error.
     /// Optionally, provide a key to access a specific entry in the data map, if
     /// the data is a map.
+    ///
+    /// Examples
+    /// --------
+    /// >>> x = S('x', data={'my_tag': 'my_value'})
+    /// >>> print(x.get_symbol_data('my_tag'))  # my_value
+    /// >>> y = S('y', data=3)
+    /// >>> print(y.get_symbol_data())  # 3
+    /// Parameters
+    /// ----------
+    /// key: str | int | Expression | None
+    ///     The symbol-data key to retrieve. Omit it to return all stored data.
     #[gen_stub(override_return_type(
         type_repr = "Expression | int | float | complex | str | bytes | dict[Expression | int | float | complex | str, typing.Any] | list[typing.Any]"
     ))]
@@ -3653,51 +4142,96 @@ impl PythonExpression {
     }
 
     /// Add this expression to `other`, returning the result.
+    ///
+    /// Parameters
+    /// ----------
+    /// rhs: Expression | int | float | complex | Decimal
+    ///     The other operand to combine or compare with.
     pub fn __add__(&self, rhs: ConvertibleToExpression) -> PyResult<PythonExpression> {
         let rhs = rhs.to_expression();
         Ok((self.expr.as_ref() + rhs.expr.as_ref()).into())
     }
 
     /// Add this expression to `other`, returning the result.
+    ///
+    /// Parameters
+    /// ----------
+    /// rhs: Expression | int | float | complex | Decimal
+    ///     The other operand to combine or compare with.
     pub fn __radd__(&self, rhs: ConvertibleToExpression) -> PyResult<PythonExpression> {
         self.__add__(rhs)
     }
 
     /// Subtract `other` from this expression, returning the result.
+    ///
+    /// Parameters
+    /// ----------
+    /// rhs: Expression | int | float | complex | Decimal
+    ///     The other operand to combine or compare with.
     pub fn __sub__(&self, rhs: ConvertibleToExpression) -> PyResult<PythonExpression> {
         self.__add__(ConvertibleToExpression(rhs.to_expression().__neg__()?))
     }
 
     /// Subtract this expression from `other`, returning the result.
+    ///
+    /// Parameters
+    /// ----------
+    /// rhs: Expression | int | float | complex | Decimal
+    ///     The other operand to combine or compare with.
     pub fn __rsub__(&self, rhs: ConvertibleToExpression) -> PyResult<PythonExpression> {
         rhs.to_expression()
             .__add__(ConvertibleToExpression(self.__neg__()?))
     }
 
-    /// Add this expression to `other`, returning the result.
+    /// Multiply this expression with `other`, returning the result.
+    ///
+    /// Parameters
+    /// ----------
+    /// rhs: Expression | int | float | complex | Decimal
+    ///     The other operand to combine or compare with.
     pub fn __mul__(&self, rhs: ConvertibleToExpression) -> PyResult<PythonExpression> {
         let rhs = rhs.to_expression();
         Ok((self.expr.as_ref() * rhs.expr.as_ref()).into())
     }
 
-    /// Add this expression to `other`, returning the result.
+    /// Multiply this expression with `other`, returning the result.
+    ///
+    /// Parameters
+    /// ----------
+    /// rhs: Expression | int | float | complex | Decimal
+    ///     The other operand to combine or compare with.
     pub fn __rmul__(&self, rhs: ConvertibleToExpression) -> PyResult<PythonExpression> {
         self.__mul__(rhs)
     }
 
     /// Divide this expression by `other`, returning the result.
+    ///
+    /// Parameters
+    /// ----------
+    /// rhs: Expression | int | float | complex | Decimal
+    ///     The other operand to combine or compare with.
     pub fn __truediv__(&self, rhs: ConvertibleToExpression) -> PyResult<PythonExpression> {
         let rhs = rhs.to_expression();
         Ok((self.expr.as_ref() / rhs.expr.as_ref()).into())
     }
 
     /// Divide `other` by this expression, returning the result.
+    ///
+    /// Parameters
+    /// ----------
+    /// rhs: Expression | int | float | complex | Decimal
+    ///     The other operand to combine or compare with.
     pub fn __rtruediv__(&self, rhs: ConvertibleToExpression) -> PyResult<PythonExpression> {
         rhs.to_expression()
             .__truediv__(ConvertibleToExpression(self.clone()))
     }
 
     /// Take `self` to power `exp`, returning the result.
+    ///
+    /// Parameters
+    /// ----------
+    /// exponent: Expression | int | float | complex | Decimal
+    ///     The exponent.
     pub fn __pow__(
         &self,
         exponent: ConvertibleToExpression,
@@ -3714,6 +4248,11 @@ impl PythonExpression {
     }
 
     /// Take `base` to power `self`, returning the result.
+    ///
+    /// Parameters
+    /// ----------
+    /// base: Expression | int | float | complex | Decimal
+    ///     The base expression.
     pub fn __rpow__(
         &self,
         base: ConvertibleToExpression,
@@ -3723,14 +4262,24 @@ impl PythonExpression {
             .__pow__(ConvertibleToExpression(self.clone()), modulo)
     }
 
-    /// Returns a warning that `**` should be used instead of `^` for taking a power.
+    /// Returns a warning that `**` should be used instead of ` ^ ` for taking a power.
+    ///
+    /// Parameters
+    /// ----------
+    /// rhs: Any
+    ///     The operand passed with `^`; use `**` for exponentiation instead.
     pub fn __xor__(&self, _rhs: Py<PyAny>) -> PyResult<PythonExpression> {
         Err(exceptions::PyTypeError::new_err(
             "Cannot xor an expression. Did you mean to write a power? Use ** instead, i.e. x**2",
         ))
     }
 
-    /// Returns a warning that `**` should be used instead of `^` for taking a power.
+    /// Returns a warning that `**` should be used instead of ` ^ ` for taking a power.
+    ///
+    /// Parameters
+    /// ----------
+    /// rhs: Any
+    ///     The operand passed with `^`; use `**` for exponentiation instead.
     pub fn __rxor__(&self, _rhs: Py<PyAny>) -> PyResult<PythonExpression> {
         Err(exceptions::PyTypeError::new_err(
             "Cannot xor an expression. Did you mean to write a power? Use ** instead, i.e. x**2",
@@ -3789,11 +4338,14 @@ impl PythonExpression {
     ///
     /// Examples
     /// -------
-    /// >>> x = S('x')
-    /// >>> f = S('f')
+    /// >>> x, f = S('x', 'f')
     /// >>> e = f(3,x)
-    /// >>> print(e)
-    /// f(3,x)
+    /// >>> print(e)  # f(3,x)
+    ///
+    /// Parameters
+    /// ----------
+    /// args: HeldExpression | Expression | int | float | complex | Decimal
+    ///     The arguments passed to the expression or transformer call.
     #[gen_stub(skip)]
     #[pyo3(signature = (*args,))]
     pub fn __call__(&self, args: &Bound<'_, PyTuple>, py: Python) -> PyResult<Py<PyAny>> {
@@ -4134,11 +4686,21 @@ impl PythonExpression {
     /// >>> f, x, x_ = S('f', 'x', 'x_')
     /// >>> e = f((x+1)**2)
     /// >>> e = e.replace(f(x_), f(x_.hold(T().expand())))
+    ///
+    /// Parameters
+    /// ----------
+    /// t: Transformer
+    ///     The transformer to bind to the expression.
     pub fn hold(&self, t: PythonTransformer) -> PyResult<PythonHeldExpression> {
         Ok(Pattern::Transformer(Box::new((Some(self.expr.to_pattern()), t.chain))).into())
     }
 
     /// Get the `idx`th component of the expression.
+    ///
+    /// Parameters
+    /// ----------
+    /// idx: int
+    ///     The zero-based index to access.
     fn __getitem__(&self, idx: isize) -> PyResult<PythonExpression> {
         let slice = match self.expr.as_view() {
             AtomView::Add(a) => a.to_slice(),
@@ -4176,6 +4738,11 @@ impl PythonExpression {
     /// >>> e.contains(x) # True
     /// >>> e.contains(x*y*z) # True
     /// >>> e.contains(x*y) # False
+    ///
+    /// Parameters
+    /// ----------
+    /// s: Transformer | HeldExpression | Expression | int | float | Decimal
+    ///     The subexpression or pattern that should be contained literally.
     pub fn contains(&self, s: ConvertibleToOpenPattern) -> PyResult<PythonCondition> {
         Ok(PythonCondition {
             condition: Condition::Yield(Relation::Contains(
@@ -4187,6 +4754,11 @@ impl PythonExpression {
 
     /// Get all symbols in the current expression, optionally including function symbols.
     /// The symbols are sorted in Symbolica's internal ordering.
+    ///
+    /// Parameters
+    /// ----------
+    /// include_function_symbols: bool
+    ///     Whether function symbols should be included in the collected symbol set.
     #[pyo3(signature = (include_function_symbols = true))]
     pub fn get_all_symbols(&self, include_function_symbols: bool) -> Vec<PythonExpression> {
         let mut s: Vec<PythonExpression> = self
@@ -4199,8 +4771,13 @@ impl PythonExpression {
         s
     }
 
-    /// Get all symbols and functions in the current expression, optionally considering function arguments as well.
+    /// Get all symbols and functions in the current expression, optionally including function symbols.
     /// The symbols are sorted in Symbolica's internal ordering.
+    ///
+    /// Parameters
+    /// ----------
+    /// enter_functions: bool
+    ///     Whether function arguments should be traversed when collecting indeterminates.
     #[pyo3(signature = (enter_functions = true))]
     pub fn get_all_indeterminates(&self, enter_functions: bool) -> Vec<PythonExpression> {
         let mut s: Vec<PythonExpression> = self
@@ -4213,8 +4790,13 @@ impl PythonExpression {
         s
     }
 
-    /// Convert all coefficients to floats with a given precision `decimal_prec`.
+    /// Convert all coefficients and built-in functions to floats with a given precision `decimal_prec`.
     /// The precision of floating point coefficients in the input will be truncated to `decimal_prec`.
+    ///
+    /// Parameters
+    /// ----------
+    /// decimal_prec: int
+    ///     The decimal precision used during numerical evaluation.
     #[pyo3(signature = (decimal_prec = 16))]
     pub fn to_float(&self, decimal_prec: u32) -> PythonExpression {
         self.expr.to_float(decimal_prec).into()
@@ -4222,6 +4804,11 @@ impl PythonExpression {
 
     /// Map all floating point and rational coefficients to the best rational approximation
     /// in the interval `[self*(1-relative_error),self*(1+relative_error)]`.
+    ///
+    /// Parameters
+    /// ----------
+    /// relative_error: float
+    ///     The maximum relative error used when converting floating-point input to a rational number.
     #[pyo3(signature = (relative_error = 0.01))]
     pub fn rationalize(&self, relative_error: f64) -> PyResult<PythonExpression> {
         if relative_error <= 0. || relative_error > 1. {
@@ -4241,6 +4828,13 @@ impl PythonExpression {
     }
 
     /// Create a pattern restriction based on the wildcard length before downcasting.
+    ///
+    /// Parameters
+    /// ----------
+    /// min_length: int
+    ///     The minimum required match length.
+    /// max_length: int | None
+    ///     The maximum allowed match length.
     #[pyo3(signature = (min_length, max_length=None))]
     pub fn req_len(
         &self,
@@ -4272,12 +4866,14 @@ impl PythonExpression {
     /// --------
     /// >>> from symbolica import *
     /// >>> x, x_ = S('x', 'x_')
-    /// >>> f = S("f")
+    /// >>> f = S('f')
     /// >>> e = f(x)*f(2)*f(f(3))
     /// >>> e = e.replace(f(x_), 1, x_.req_type(AtomType.Num))
-    /// >>> print(e)
-    ///
-    /// Yields `f(x)*f(1)`.
+    /// >>> print(e)  # f(x)*f(1)
+    /// Parameters
+    /// ----------
+    /// atom_type: AtomType
+    ///     The atom type to test or require.
     pub fn req_type(&self, atom_type: PythonAtomType) -> PyResult<PythonPatternRestriction> {
         match self.expr.as_view() {
             AtomView::Var(v) => {
@@ -4317,8 +4913,11 @@ impl PythonExpression {
     /// >>> x = S('x', tags=['a', 'b'])
     /// >>> x_ = S('x_')
     /// >>> e = x.replace(x_, 1, x_.req_tag('b'))
-    /// >>> print(e)
-    /// Yields `1`.
+    /// >>> print(e)  # 1
+    /// Parameters
+    /// ----------
+    /// tag: str
+    ///     The tag to test or require.
     pub fn req_tag(&self, tag: &str) -> PyResult<PythonPatternRestriction> {
         match self.expr.as_view() {
             AtomView::Var(v) => {
@@ -4345,7 +4944,7 @@ impl PythonExpression {
         }
     }
 
-    /// Create a pattern restriction based on the attribute of a matched variable or function.
+    /// Create a pattern restriction based on the attributes of a matched variable or function.
     ///
     /// Examples
     /// --------
@@ -4353,9 +4952,11 @@ impl PythonExpression {
     /// >>> x = S('f', is_linear=True)
     /// >>> x_ = S('x_')
     /// >>> print(E('f(x)').replace(E('x_(x)'), 1, ~S('x_').req_attr(SymbolAttribute.Linear)))
-    /// >>> print(e)
-    ///
-    /// Yields `f(x)`.
+    /// >>> print(e)  # f(x)
+    /// Parameters
+    /// ----------
+    /// attribute: SymbolAttribute
+    ///     The symbol attribute to test or require.
     pub fn req_attr(&self, attribute: PythonSymbolAttribute) -> PyResult<PythonPatternRestriction> {
         match self.expr.as_view() {
             AtomView::Var(v) => {
@@ -4394,6 +4995,11 @@ impl PythonExpression {
     }
 
     /// Create a pattern restriction that filters for expressions that contain `a`.
+    ///
+    /// Parameters
+    /// ----------
+    /// a: Expression
+    ///     The expression that must occur inside the match.
     pub fn req_contains(&self, a: PythonExpression) -> PyResult<PythonPatternRestriction> {
         match self.expr.as_view() {
             AtomView::Var(v) => {
@@ -4445,6 +5051,11 @@ impl PythonExpression {
     }
 
     /// Test if the expression is of a certain type.
+    ///
+    /// Parameters
+    /// ----------
+    /// atom_type: AtomType
+    ///     The atom type to test or require.
     pub fn is_type(&self, atom_type: PythonAtomType) -> PythonCondition {
         PythonCondition {
             condition: Condition::Yield(Relation::IsType(
@@ -4493,7 +5104,7 @@ impl PythonExpression {
         })
     }
 
-    /// Create a pattern restriction that passes when the wildcard is smaller than a number `num`.
+    /// Create a pattern restriction that passes when the wildcard is smaller than `other`.
     /// If the matched wildcard is not a number, the pattern fails.
     ///
     /// When the option `cmp_any_atom` is set to `True`, this function compares atoms
@@ -4502,11 +5113,18 @@ impl PythonExpression {
     ///
     /// Examples
     /// --------
-    /// >>> from symbolica import Expression
+    /// >>> from symbolica import *
     /// >>> x_ = S('x_')
-    /// >>> f = S("f")
+    /// >>> f = S('f')
     /// >>> e = f(1)*f(2)*f(3)
     /// >>> e = e.replace(f(x_), 1, x_.req_lt(2))
+    ///
+    /// Parameters
+    /// ----------
+    /// other: Expression | int | float | complex | Decimal
+    ///     The value that the match is compared against.
+    /// cmp_any_atom: bool
+    ///     Whether the comparison may be satisfied by any atom in the expression instead of only the whole match.
     #[pyo3(signature =(other, cmp_any_atom = false))]
     pub fn req_lt(
         &self,
@@ -4516,7 +5134,7 @@ impl PythonExpression {
         req_cmp!(self, other, cmp_any_atom, is_lt)
     }
 
-    /// Create a pattern restriction that passes when the wildcard is greater than a number `num`.
+    /// Create a pattern restriction that passes when the wildcard is greater than `other`.
     /// If the matched wildcard is not a number, the pattern fails.
     ///
     /// When the option `cmp_any_atom` is set to `True`, this function compares atoms
@@ -4525,11 +5143,18 @@ impl PythonExpression {
     ///
     /// Examples
     /// --------
-    /// >>> from symbolica import Expression
+    /// >>> from symbolica import *
     /// >>> x_ = S('x_')
-    /// >>> f = S("f")
+    /// >>> f = S('f')
     /// >>> e = f(1)*f(2)*f(3)
     /// >>> e = e.replace(f(x_), 1, x_.req_gt(2))
+    ///
+    /// Parameters
+    /// ----------
+    /// other: Expression | int | float | complex | Decimal
+    ///     The value that the match is compared against.
+    /// cmp_any_atom: bool
+    ///     Whether the comparison may be satisfied by any atom in the expression instead of only the whole match.
     #[pyo3(signature =(other, cmp_any_atom = false))]
     pub fn req_gt(
         &self,
@@ -4539,7 +5164,7 @@ impl PythonExpression {
         req_cmp!(self, other, cmp_any_atom, is_gt)
     }
 
-    /// Create a pattern restriction that passes when the wildcard is smaller than or equal to a number `num`.
+    /// Create a pattern restriction that passes when the wildcard is smaller than or equal to `other`.
     /// If the matched wildcard is not a number, the pattern fails.
     ///
     /// When the option `cmp_any_atom` is set to `True`, this function compares atoms
@@ -4548,11 +5173,18 @@ impl PythonExpression {
     ///
     /// Examples
     /// --------
-    /// >>> from symbolica import Expression
+    /// >>> from symbolica import *
     /// >>> x_ = S('x_')
-    /// >>> f = S("f")
+    /// >>> f = S('f')
     /// >>> e = f(1)*f(2)*f(3)
     /// >>> e = e.replace(f(x_), 1, x_.req_le(2))
+    ///
+    /// Parameters
+    /// ----------
+    /// other: Expression | int | float | complex | Decimal
+    ///     The value that the match is compared against.
+    /// cmp_any_atom: bool
+    ///     Whether the comparison may be satisfied by any atom in the expression instead of only the whole match.
     #[pyo3(signature =(other, cmp_any_atom = false))]
     pub fn req_le(
         &self,
@@ -4562,7 +5194,7 @@ impl PythonExpression {
         req_cmp!(self, other, cmp_any_atom, is_le)
     }
 
-    /// Create a pattern restriction that passes when the wildcard is greater than or equal to a number `num`.
+    /// Create a pattern restriction that passes when the wildcard is greater than or equal to `other`.
     /// If the matched wildcard is not a number, the pattern fails.
     ///
     /// When the option `cmp_any_atom` is set to `True`, this function compares atoms
@@ -4571,11 +5203,18 @@ impl PythonExpression {
     ///
     /// Examples
     /// --------
-    /// >>> from symbolica import Expression
+    /// >>> from symbolica import *
     /// >>> x_ = S('x_')
-    /// >>> f = S("f")
+    /// >>> f = S('f')
     /// >>> e = f(1)*f(2)*f(3)
     /// >>> e = e.replace(f(x_), 1, x_.req_ge(2))
+    ///
+    /// Parameters
+    /// ----------
+    /// other: Expression | int | float | complex | Decimal
+    ///     The value that the match is compared against.
+    /// cmp_any_atom: bool
+    ///     Whether the comparison may be satisfied by any atom in the expression instead of only the whole match.
     #[pyo3(signature =(other, cmp_any_atom = false))]
     pub fn req_ge(
         &self,
@@ -4590,11 +5229,16 @@ impl PythonExpression {
     ///
     /// Examples
     /// --------
-    /// >>> from symbolica import Expression
+    /// >>> from symbolica import *
     /// >>> x_ = S('x_')
-    /// >>> f = S("f")
+    /// >>> f = S('f')
     /// >>> e = f(1)*f(2)*f(3)
     /// >>> e = e.replace(f(x_), 1, x_.req(lambda m: m == 2 or m == 3))
+    ///
+    /// Parameters
+    /// ----------
+    /// filter_fn: Callable[[Expression], bool | Condition]
+    ///     A callback that filters partially constructed graphs.
     pub fn req(
         &self,
         #[gen_stub(override_type(type_repr = "typing.Callable[[Expression], bool | Condition]"))]
@@ -4645,11 +5289,18 @@ impl PythonExpression {
     ///
     /// Examples
     /// --------
-    /// >>> from symbolica import Expression
+    /// >>> from symbolica import *
     /// >>> x_, y_ = S('x_', 'y_')
-    /// >>> f = S("f")
+    /// >>> f = S('f')
     /// >>> e = f(1,2)
     /// >>> e = e.replace(f(x_,y_), 1, x_.req_cmp_lt(y_))
+    ///
+    /// Parameters
+    /// ----------
+    /// other: Expression
+    ///     The expression that the match is compared against.
+    /// cmp_any_atom: bool
+    ///     Whether the comparison may be satisfied by any atom in the expression instead of only the whole match.
     #[pyo3(signature =(other, cmp_any_atom = false))]
     pub fn req_cmp_lt(
         &self,
@@ -4668,11 +5319,18 @@ impl PythonExpression {
     ///
     /// Examples
     /// --------
-    /// >>> from symbolica import Expression
+    /// >>> from symbolica import *
     /// >>> x_, y_ = S('x_', 'y_')
-    /// >>> f = S("f")
-    /// >>> e = f(2,1)
+    /// >>> f = S('f')
+    /// >>> e = f(1,2)
     /// >>> e = e.replace(f(x_,y_), 1, x_.req_cmp_gt(y_))
+    ///
+    /// Parameters
+    /// ----------
+    /// other: Expression
+    ///     The expression that the match is compared against.
+    /// cmp_any_atom: bool
+    ///     Whether the comparison may be satisfied by any atom in the expression instead of only the whole match.
     #[pyo3(signature =(other, cmp_any_atom = false))]
     pub fn req_cmp_gt(
         &self,
@@ -4682,7 +5340,7 @@ impl PythonExpression {
         req_wc_cmp!(self, other, cmp_any_atom, is_gt)
     }
 
-    /// Create a pattern restriction that passes when the wildcard is less than or equal to another wildcard.
+    /// Create a pattern restriction that passes when the wildcard is smaller than or equal to another wildcard.
     /// If the matched wildcards are not a numbers, the pattern fails.
     ///
     /// When the option `cmp_any_atom` is set to `True`, this function compares atoms
@@ -4691,11 +5349,18 @@ impl PythonExpression {
     ///
     /// Examples
     /// --------
-    /// >>> from symbolica import Expression
+    /// >>> from symbolica import *
     /// >>> x_, y_ = S('x_', 'y_')
-    /// >>> f = S("f")
+    /// >>> f = S('f')
     /// >>> e = f(1,2)
     /// >>> e = e.replace(f(x_,y_), 1, x_.req_cmp_le(y_))
+    ///
+    /// Parameters
+    /// ----------
+    /// other: Expression
+    ///     The expression that the match is compared against.
+    /// cmp_any_atom: bool
+    ///     Whether the comparison may be satisfied by any atom in the expression instead of only the whole match.
     #[pyo3(signature =(other, cmp_any_atom = false))]
     pub fn req_cmp_le(
         &self,
@@ -4714,11 +5379,18 @@ impl PythonExpression {
     ///
     /// Examples
     /// --------
-    /// >>> from symbolica import Expression
+    /// >>> from symbolica import *
     /// >>> x_, y_ = S('x_', 'y_')
-    /// >>> f = S("f")
-    /// >>> e = f(2,1)
+    /// >>> f = S('f')
+    /// >>> e = f(1,2)
     /// >>> e = e.replace(f(x_,y_), 1, x_.req_cmp_ge(y_))
+    ///
+    /// Parameters
+    /// ----------
+    /// other: Expression
+    ///     The expression that the match is compared against.
+    /// cmp_any_atom: bool
+    ///     Whether the comparison may be satisfied by any atom in the expression instead of only the whole match.
     #[pyo3(signature =(other, cmp_any_atom = false))]
     pub fn req_cmp_ge(
         &self,
@@ -4733,11 +5405,18 @@ impl PythonExpression {
     ///
     /// Examples
     /// --------
-    /// >>> from symbolica import Expression
+    /// >>> from symbolica import *
     /// >>> x_, y_ = S('x_', 'y_')
-    /// >>> f = S("f")
+    /// >>> f = S('f')
     /// >>> e = f(1)*f(2)*f(3)
     /// >>> e = e.replace(f(x_)*f(y_), 1, x_.req_cmp(y_, lambda m1, m2: m1 + m2 == 4))
+    ///
+    /// Parameters
+    /// ----------
+    /// other: Expression | int | float | complex | Decimal
+    ///     The other operand to combine or compare with.
+    /// cmp_fn: Callable[[Expression, Expression], bool | Condition]
+    ///     The comparison callback applied to the matched values.
     pub fn req_cmp(
         &self,
         other: PythonExpression,
@@ -4821,14 +5500,23 @@ impl PythonExpression {
     }
 
     /// Map the transformations to every term in the expression.
-    /// The execution happens in parallel, using `n_cores`.
+    /// The execution happens in parallel using `n_cores`.
     ///
     /// Examples
     /// --------
     /// >>> x, x_ = S('x', 'x_')
     /// >>> e = (1+x)**2
-    /// >>> r = e.map(Transformer().expand().replace(x, 6))
+    /// >>> r = e.map(T().expand().replace(x, 6))
     /// >>> print(r)
+    ///
+    /// Parameters
+    /// ----------
+    /// op: Transformer
+    ///     The transformations to apply.
+    /// n_cores: int, optional
+    ///     The number of CPU cores used for parallel execution.
+    /// stats_to_file: str, optional
+    ///     If set, the output of the `stats` transformer will be written to a file in JSON format.
     #[pyo3(signature = (op, n_cores = None, stats_to_file = None))]
     pub fn map(
         &self,
@@ -4895,7 +5583,28 @@ impl PythonExpression {
         Ok(b.into())
     }
 
-    /// Expand the expression. Optionally, expand in `var` only.
+    /// Expand the expression. Optionally, expand in `var` only. `var` can be a variable or a function.
+    /// If it is a variable, any function with that variable name is also expanded in.
+    /// To expand in multiple functions at the same time, wrap them in a function with the same symbol first,
+    /// using a match and replace, and then expand in that function.
+    ///
+    /// Using `via_poly=True` may give a significant speedup for large expressions.
+    ///
+    /// Examples
+    /// --------
+    /// >>> from symbolica import *
+    /// >>> x, y, f, g = S('x', 'y', 'f', 'g')
+    /// >>> e = (f(1) + g(2))*(f(3) + (y+1)**2)
+    /// >>> print(e.expand(f))
+    ///
+    /// yields `f(1)*f(3)+f(3)*g(2)+(1+y)^2*f(1)+(1+y)^2*g(2)`.
+    ///
+    /// Parameters
+    /// ----------
+    /// var: Expression | None
+    ///     The variable to expand with respect to. If omitted, expand all variables.
+    /// via_poly: bool | None
+    ///     Whether the operation should use an intermediate polynomial representation.
     #[pyo3(signature = (var = None, via_poly = None))]
     pub fn expand(
         &self,
@@ -4950,31 +5659,36 @@ impl PythonExpression {
         self.expr.expand_num().into()
     }
 
-    /// Collect terms involving the same power of `x`, where `x` is an indeterminate.
+    /// Collect terms involving the same power of the indeterminate(s) `x`.
     /// Return the list of key-coefficient pairs and the remainder that matched no key.
     ///
-    /// Both the *key* (the quantity collected in) and its coefficient can be mapped using
+    /// Both the key (the quantity collected in) and its coefficient can be mapped using
     /// `key_map` and `coeff_map` respectively.
     ///
     /// Examples
     /// --------
-    ///
     /// >>> from symbolica import *
     /// >>> x, y = S('x', 'y')
     /// >>> e = 5*x + x * y + x**2 + 5
     /// >>>
-    /// >>> print(e.collect(x))
-    ///
-    /// yields `x^2+x*(y+5)+5`.
-    ///
+    /// >>> print(e.collect(x))  # x^2+x*(y+5)+5
     /// >>> from symbolica import *
     /// >>> x, y = S('x', 'y')
-    /// >>> exp, coeff = S('var', 'coeff')
+    /// >>> var, coeff = S('var', 'coeff')
     /// >>> e = 5*x + x * y + x**2 + 5
     /// >>>
-    /// >>> print(e.collect(x, key_map=lambda x: exp(x), coeff_map=lambda x: coeff(x)))
+    /// >>> print(e.collect(x, key_map=lambda x: var(x), coeff_map=lambda x: coeff(x)))
     ///
     /// yields `var(1)*coeff(5)+var(x)*coeff(y+5)+var(x^2)*coeff(1)`.
+    ///
+    /// Parameters
+    /// ----------
+    /// *x: Expression
+    ///     The variable(s) or function(s) to collect terms in
+    /// key_map
+    ///     A function to be applied to the quantity collected in
+    /// coeff_map
+    ///     A function to be applied to the coefficient
     #[pyo3(signature = (*x, key_map = None, coeff_map = None))]
     pub fn collect(
         &self,
@@ -5067,12 +5781,7 @@ impl PythonExpression {
         Ok(b.into())
     }
 
-    /// Collect terms involving the same power of variables or functions with the name `x`, e.g.
-    ///
-    /// ```math
-    /// collect_symbol(f(1,2) + x*f*(1,2), f) = (1+x)*f(1,2)
-    /// ```
-    ///
+    /// Collect terms involving the same power of variables or functions with the name `x`.
     ///
     /// Both the *key* (the quantity collected in) and its coefficient can be mapped using
     /// `key_map` and `coeff_map` respectively.
@@ -5080,13 +5789,19 @@ impl PythonExpression {
     /// Examples
     /// --------
     ///
-    /// >>> from symbolica import Expression
+    /// >>> from symbolica import *
     /// >>> x, f = S('x', 'f')
     /// >>> e = f(1,2) + x*f(1,2)
     /// >>>
-    /// >>> print(e.collect_symbol(f))
-    ///
-    /// yields `(1+x)*f(1,2)`.
+    /// >>> print(e.collect_symbol(f))  # (1+x)*f(1,2)
+    /// Parameters
+    /// ----------
+    /// x: Expression
+    ///     The symbol to collect in
+    /// key_map
+    ///     A function to be applied to the quantity collected in
+    /// coeff_map
+    ///     A function to be applied to the coefficient
     #[pyo3(signature = (x, key_map = None, coeff_map = None))]
     pub fn collect_symbol(
         &self,
@@ -5257,30 +5972,33 @@ impl PythonExpression {
     /// Examples
     /// --------
     ///
-    /// >>> from symbolica import Expression
-    /// >>>
+    /// >>> from symbolica import *
     /// >>> x, y = S('x', 'y')
     /// >>> e = 5*x + x * y + x**2 + y*x**2
     /// >>> print(e.coefficient(x**2))
     ///
     /// yields
     ///
-    /// ```log
+    /// ```
     /// y + 1
     /// ```
+    ///
+    /// Parameters
+    /// ----------
+    /// x: Expression
+    ///     The variable whose coefficient should be extracted.
     pub fn coefficient(&self, x: ConvertibleToExpression) -> PythonExpression {
         let r = self.expr.coefficient(x.to_expression().expr.as_view());
         r.into()
     }
 
-    /// Collect terms involving the same power of `x`, where `x` is an indeterminate.
-    /// Return the list of key-coefficient pairs and the remainder that matched no key.
+    /// Collect terms involving the same power of `x`, where `x` are variables or functions.
+    /// Return the list of key-coefficient pairs.
     ///
     /// Examples
     /// --------
     ///
-    /// from symbolica import Expression
-    /// >>>
+    /// >>> from symbolica import *
     /// >>> x, y = S('x', 'y')
     /// >>> e = 5*x + x * y + x**2 + 5
     /// >>>
@@ -5288,12 +6006,16 @@ impl PythonExpression {
     /// >>>     print(a[0], a[1])
     ///
     /// yields
-    ///
-    /// ```log
+    /// ```
     /// x y+5
     /// x^2 1
     /// 1 5
     /// ```
+    ///
+    /// Parameters
+    /// ----------
+    /// x: Expression
+    ///     The variables whose coefficient exponents should be listed.
     #[pyo3(signature = (*x,))]
     pub fn coefficient_list(
         &self,
@@ -5333,6 +6055,11 @@ impl PythonExpression {
     }
 
     /// Derive the expression w.r.t the variable `x`.
+    ///
+    /// Parameters
+    /// ----------
+    /// x: Expression
+    ///     The variable with respect to which to differentiate.
     pub fn derivative(&self, x: ConvertibleToExpression) -> PyResult<PythonExpression> {
         let id = if let AtomView::Var(x) = x.to_expression().expr.as_view() {
             x.get_symbol()
@@ -5350,17 +6077,27 @@ impl PythonExpression {
     /// Series expand in `x` around `expansion_point` to depth `depth`.
     ///
     /// Examples
-    /// -------
-    /// >>> from symbolica import Expression
-    /// >>> x, y = S('x', 'y')
-    /// >>> f = S('f')
-    /// >>>
-    /// >>> e = 2* x**2 * y + f(x)
-    /// >>> e = e.series(x, 0, 2)
-    /// >>>
-    /// >>> print(e)
+    /// --------
     ///
-    /// yields `f(0)+x*der(1,f,0)+1/2*x^2*(der(2,f,0)+4*y)`.
+    /// >>> p = E('cos(x)/(x+1)')
+    /// >>> print(p.series(S('x'), 0, 3))
+    ///
+    /// yields `-1-x-1/2*x^2-1/2*x^3+𝒪(x^4)`
+    ///
+    /// Parameters
+    /// ----------
+    ///
+    /// x : Expression
+    ///     The variable to expand in.
+    /// expansion_point : Expression | int | float | complex | Decimal
+    ///     The point around which to expand.
+    /// depth : int
+    ///     The depth of the expansion.
+    /// depth_denom : int, optional
+    ///     The denominator of the depth (for a rational depth), by default 1.
+    /// depth_is_absolute : bool, optional
+    ///     If `True`, `depth` is the absolute depth in `x`; if `False`, `depth` is the
+    ///     relative to the lowest order encountered in the expression.
     #[pyo3(signature = (x, expansion_point, depth, depth_denom = 1, depth_is_absolute = true))]
     pub fn series(
         &self,
@@ -5398,15 +6135,23 @@ impl PythonExpression {
     /// If `None` is passed, the expression will be decomposed in all variables
     /// which involves a potentially expensive Groebner basis computation.
     ///
+    ///
     /// Examples
     /// --------
     ///
     /// >>> p = E('1/((x+y)*(x^2+x*y+1)(x+1))')
     /// >>> print(p.apart(S('x')))
     ///
-    /// Multivariate partial fractioning
+    /// Multivariate partial fractioning:
     /// >>> p = E('(2y-x)/(y*(x+y)*(y-x))')
     /// >>> print(p.apart())
+    ///
+    /// yields `3/2*y^-1*(x+y)^-1+1/2*y^-1*(-x+y)^-1`
+    ///
+    /// Parameters
+    /// ----------
+    /// x: Expression | None
+    ///     The variable with respect to which to perform the partial-fraction decomposition.
     #[pyo3(signature = (x = None))]
     pub fn apart(&self, x: Option<PythonExpression>) -> PyResult<PythonExpression> {
         if let Some(x) = x {
@@ -5464,13 +6209,22 @@ impl PythonExpression {
     /// Convert the expression to a polynomial, optionally, with the variables and the ordering specified in `vars`.
     /// All non-polynomial elements will be converted to new independent variables.
     ///
-    /// If a `modulus` is provided, the coefficients will be converted to finite field elements mod `modulus`.
+    /// The coefficients will be converted to finite field elements modulo `modulus`.
     /// If on top a `power` is provided, for example `(2, a)`, the polynomial will be converted to the Galois field
     /// `GF(modulus^2)` where `a` is the variable of the minimal polynomial of the field.
     ///
-    /// If a `minimal_poly` is provided, the polynomial will be converted to a number field with the given minimal polynomial.
-    /// The minimal polynomial must be a monic, irreducible univariate polynomial. If a `modulus` is provided as well,
-    /// the Galois field will be created with `minimal_poly` as the minimal polynomial.
+    /// If a `minimal_poly` is provided, the Galois field will be created with `minimal_poly` as the minimal polynomial.
+    ///
+    /// Parameters
+    /// ----------
+    /// modulus: int
+    ///     The modulus that defines the finite field.
+    /// power: tuple[int, Expression] | None
+    ///     The extension degree and generator that define the finite field.
+    /// minimal_poly: Polynomial | None
+    ///     The minimal polynomial that defines the algebraic extension.
+    /// vars: Sequence[Expression] | None
+    ///     The variables treated as polynomial variables, in the given order.
     #[gen_stub(skip)]
     #[pyo3(signature = (modulus = None, power = None, minimal_poly = None, vars = None))]
     pub fn to_polynomial(
@@ -5656,12 +6410,17 @@ impl PythonExpression {
     /// The latter is useful if it is known in advance that more variables may be added in the future to the
     /// rational polynomial through composition with other rational polynomials.
     ///
-    /// All non-rational polynomial parts will automatically be converted to new independent variables.
+    /// All non-rational polynomial parts are converted to new, independent variables.
     ///
     /// Examples
     /// --------
     /// >>> a = E('(1 + 3*x1 + 5*x2 + 7*x3 + 9*x4 + 11*x5 + 13*x6 + 15*x7)^2 - 1').to_rational_polynomial()
     /// >>> print(a)
+    ///
+    /// Parameters
+    /// ----------
+    /// vars: Sequence[Expression] | None
+    ///     The variables treated as polynomial variables, in the given order.
     #[pyo3(signature = (vars = None))]
     pub fn to_rational_polynomial(
         &self,
@@ -5777,8 +6536,8 @@ impl PythonExpression {
         })
     }
 
-    /// Return an iterator over the replacement of the pattern `self` on `lhs` by `rhs`.
-    /// Restrictions on pattern can be supplied through `cond`.
+    /// Return an iterator over the pattern `self` matching to `lhs`.
+    /// Restrictions on the pattern can be supplied through `cond`.
     ///
     /// The `level_range` specifies the `[min,max]` level at which the pattern is allowed to match.
     /// The first level is 0 and the level is increased when going into a function or one level deeper in the expression tree,
@@ -5787,19 +6546,29 @@ impl PythonExpression {
     /// Examples
     /// --------
     ///
-    /// >>> from symbolica import Expression
-    /// >>> x_ = S('x_')
+    /// >>> x, x_ = S('x','x_')
     /// >>> f = S('f')
-    /// >>> e = f(1)*f(2)*f(3)
-    /// >>> for r in e.replace(f(x_), f(x_ + 1)):
-    /// >>>     print(r)
+    /// >>> e = f(x)*f(1)*f(2)*f(3)
+    /// >>> for match in e.match(f(x_)):
+    /// >>>    for map in match:
+    /// >>>        print(map[0],'=', map[1])
     ///
-    /// Yields:
-    /// ```log
-    /// f(2)*f(2)*f(3)
-    /// f(1)*f(3)*f(3)
-    /// f(1)*f(2)*f(4)
-    /// ```
+    /// Parameters
+    /// ----------
+    /// lhs: Expression | int | float | complex | Decimal
+    ///     The expression to match against.
+    /// cond: PatternRestriction | Condition | None
+    ///     An additional restriction that a match or replacement must satisfy.
+    /// min_level: int
+    ///     The minimum level at which a match is allowed.
+    /// max_level: int | None
+    ///     The maximum level at which a match is allowed.
+    /// level_range: tuple[int, int | None] | None
+    ///     The `(min_level, max_level)` range in which matches are allowed.
+    /// level_is_tree_depth: bool
+    ///     Whether levels should be measured by tree depth instead of function nesting.
+    /// partial: bool
+    ///     Whether matches are allowed inside larger expressions instead of only at the top level.
     #[pyo3(signature = (lhs, rhs, cond = None, min_level=0, max_level=None, level_range = None, level_is_tree_depth = false, partial=true, allow_new_wildcards_on_rhs = false))]
     pub fn replace_iter(
         &self,
@@ -5850,14 +6619,9 @@ impl PythonExpression {
         ))
     }
 
-    /// Replace all atoms matching the pattern `pattern` by the right-hand side `rhs`.
-    /// Restrictions on pattern can be supplied through `cond`.
-    ///
-    /// The `level_range` specifies the `[min,max]` level at which the pattern is allowed to match.
-    /// The first level is 0 and the level is increased when going into a function or one level deeper in the expression tree,
-    /// depending on `level_is_tree_depth`.
-    ///
-    /// The entire operation can be repeated until there are no more matches using `repeat=True`.
+    /// Replace all subexpressions matching the pattern `pattern` by the right-hand side `rhs`.
+    /// The right-hand side can be an expression with wildcards, a held expression (see :meth:`Expression.hold`) or
+    /// a function that maps a dictionary of wildcards to an expression.
     ///
     /// Examples
     /// --------
@@ -5865,38 +6629,45 @@ impl PythonExpression {
     /// >>> x, w1_, w2_ = S('x','w1_','w2_')
     /// >>> f = S('f')
     /// >>> e = f(3,x)
-    /// >>> r = e.replace(f(w1_,w2_), f(w1_ - 1, w2_**2), (w1_ >= 1) & w2_.is_var())
+    /// >>> r = e.replace(f(w1_,w2_), f(w1_ - 1, w2_**2), w1_ >= 1)
     /// >>> print(r)
     ///
     /// Parameters
     /// ----------
-    /// pattern: Transformer | Expression | int
+    /// pattern:
     ///     The pattern to match.
-    /// rhs: Transformer | Expression | int
+    /// rhs:
     ///     The right-hand side to replace the matched subexpression with. Can be a transformer, expression or a function that maps a dictionary of wildcards to an expression.
-    /// cond: Optional[PatternRestriction]
+    /// cond: PatternRestriction | Condition, optional
     ///     Conditions on the pattern.
+    /// non_greedy_wildcards: Sequence[Expression], optional
+    ///     Wildcards that try to match as little as possible.
     /// min_level: int, optional
     ///     The minimum level at which the pattern is allowed to match. The first level is 0 and the level is increased when going into a function or one level deeper in the expression tree, depending on `level_is_tree_depth`.
-    /// max_level: int, optional
-    ///     The maximum level at which the pattern is allowed to match. The first level is 0 and the level is increased when going into a function or one level deeper in the expression tree, depending on `level_is_tree_depth`.
-    /// level_range: (int, int), optional
+    /// max_level: int | None, optional
+    ///     The maximum level at which the pattern is allowed to match. `None` means no maximum.
+    /// level_range:
     ///     Specifies the `[min,max]` level at which the pattern is allowed to match. The first level is 0 and the level is increased when going into a function or one level deeper in the expression tree, depending on `level_is_tree_depth`.
+    ///     Prefer setting `min_level` and `max_level` directly over `level_range`, as this argument will be deprecated in the future.
     /// level_is_tree_depth: bool, optional
     ///     If set to `True`, the level is increased when going one level deeper in the expression tree.
+    /// partial: bool, optional
+    ///     If set to `True`, allow the pattern to match to a part of a term. For example, with `partial=True`, the pattern `x+y` matches to `x+2+y`.
     /// allow_new_wildcards_on_rhs: bool, optional
-    ///     If set to `True`, wildcards that do not appear ion the pattern are allowed on the right-hand side.
+    ///     If set to `True`, allow wildcards that do not appear in the pattern on the right-hand side.
     /// rhs_cache_size: int, optional
-    ///      Cache the first `rhs_cache_size` substituted patterns. If set to `None`, an internally determined cache size is used.
-    ///      Warning: caching should be disabled (`rhs_cache_size=0`) if the right-hand side contains side effects, such as updating a global variable.
+    ///     Cache the first `rhs_cache_size` substituted patterns. If set to `None`, an internally determined cache size is used.
+    ///     **Warning**: caching should be disabled (`rhs_cache_size=0`) if the right-hand side contains side effects, such as updating a global variable.
     /// repeat: bool, optional
     ///     If set to `True`, the entire operation will be repeated until there are no more matches.
     /// once: bool, optional
-    ///     If set to `True`, only the first match will be replaced.
+    ///     If set to `True`, only the first match will be replaced, instead of all non-overlapping matches.
     /// bottom_up: bool, optional
-    ///     If set to `True`, the replacement will be applied from the bottom of the expression tree upwards.
+    ///     Replace deepest nested matches first instead of replacing the outermost matches first.
+    ///     For example, replacing `f(x_)` with `x_^2` in `f(f(x))` would yield `f(x)^2` with the default settings and `f(x^2)` with bottom-up replacement.
     /// nested: bool, optional
-    ///     If set to `True`, nested replacements will be allowed.
+    ///     Replace nested matches, starting from the deepest first and acting on the result of that replacement.
+    ///     For example, replacing `f(x_)` with `x_^2` in `f(f(x))` would yield `f(x)^2` with the default settings and `f(x^2)^2` with nested replacement.
     #[pyo3(signature = (pattern, rhs, cond = None, non_greedy_wildcards = None, min_level=0, max_level=None, level_range = None, level_is_tree_depth = false, partial=true, allow_new_wildcards_on_rhs = false, rhs_cache_size = None, repeat = false, once = false, bottom_up = false, nested = false))]
     pub fn replace(
         &self,
@@ -6044,7 +6815,24 @@ impl PythonExpression {
         Ok(out.into_inner().into())
     }
 
-    /// Replace all wildcards in the expression with the given replacements.
+    /// Replace all wildcards in the expression with the corresponding values in `replacements`.
+    /// This function can be used to substitute the result from (see :meth:`Expression.match`)
+    /// into its pattern.
+    ///
+    /// Examples
+    /// --------
+    ///
+    /// >>> x, x_, f= S('x', 'x_', 'f')
+    /// >>> e = 1 + x + f(2)
+    /// >>> p = f(x_)
+    /// >>> r = next(e.match(p))
+    /// >>> p.replace_wildcards(r)
+    /// f(2)
+    ///
+    /// Parameters
+    /// ----------
+    /// replacements: dict[Expression, Expression]
+    ///     A map of wildcards to their replacements.
     pub fn replace_wildcards(
         &self,
         replacements: HashMap<PythonExpression, PythonExpression>,
@@ -6085,11 +6873,20 @@ impl PythonExpression {
     ///
     /// Examples
     /// --------
-    /// >>> from symbolica import Expression
+    /// >>> from symbolica import *
     /// >>> x, y, c = S('x', 'y', 'c')
     /// >>> f = S('f')
     /// >>> x_r, y_r = Expression.solve_linear_system([f(c)*x + y/c - 1, y-c/2], [x, y])
     /// >>> print('x =', x_r, ', y =', y_r)
+    ///
+    /// Parameters
+    /// ----------
+    /// system: Sequence[Expression]
+    ///     The equations or polynomials that define the system.
+    /// variables: Sequence[Expression]
+    ///     The variables to solve for, in order.
+    /// warn_if_underdetermined: bool
+    ///     Whether to warn when the system is underdetermined.
     #[pyo3(signature = (system, variables, warn_if_underdetermined = true))]
     #[classmethod]
     pub fn solve_linear_system(
@@ -6121,15 +6918,28 @@ impl PythonExpression {
     }
 
     /// Find the root of an expression in `x` numerically over the reals using Newton's method.
-    /// Use `init` as the initial guess for the root.
+    /// Use `init` as the initial guess for the root. This method uses the same precision as `init`.
     ///
     /// Examples
     /// --------
-    /// >>> from symbolica import Expression
-    /// >>> x, y, c = S('x', 'y', 'c')
-    /// >>> f = S('f')
-    /// >>> x_r, y_r = Expression.solve_linear_system([f(c)*x + y/c - 1, y-c/2], [x, y])
-    /// >>> print('x =', x_r, ', y =', y_r)
+    /// >>> from symbolica import *
+    /// >>> a = E("x^2-2").nsolve(
+    /// ...     E("x"),
+    /// ...     Decimal("1.000000000000000000000000000000000000000000000000000000000000000000000000"),
+    /// ...     1e-74,
+    /// ...     1000000,
+    /// ... )
+    ///
+    /// Parameters
+    /// ----------
+    /// variable: Expression
+    ///     The variable to solve for.
+    /// init: Decimal
+    ///     The initial guess for Newton's method.
+    /// prec: float
+    ///     The numerical tolerance for the Newton iteration.
+    /// max_iterations: int
+    ///     The maximum number of Newton iterations.
     #[gen_stub(override_return_type(type_repr = "decimal.Decimal", imports = ("decimal")))]
     #[pyo3(signature =
         (variable,
@@ -6170,15 +6980,31 @@ impl PythonExpression {
     }
 
     /// Find a common root of multiple expressions in `variables` numerically over the reals using Newton's method.
-    /// Use `init` as the initial guess for the root.
+    /// Use `init` as the initial guess for the root. This method uses the same precision as `init`.
     ///
     /// Examples
     /// --------
-    /// >>> from symbolica import Expression
-    /// >>> x, y, c = S('x', 'y', 'c')
-    /// >>> f = S('f')
-    /// >>> x_r, y_r = Expression.solve_linear_system([f(c)*x + y/c - 1, y-c/2], [x, y])
-    /// >>> print('x =', x_r, ', y =', y_r)
+    /// >>> from symbolica import *
+    /// >>> a = Expression.nsolve_system(
+    /// ...     [E("5x^2+x*y^2+sin(2y)^2 - 2"), E("exp(2x-y)+4y - 3")],
+    /// ...     [S("x"), S("y")],
+    /// ...     [Decimal("1.00000000000000000"), Decimal("1.00000000000000000")],
+    /// ...     1e-20,
+    /// ...     1000000,
+    /// ... )
+    ///
+    /// Parameters
+    /// ----------
+    /// system: Sequence[Expression]
+    ///     The equations or polynomials that define the system.
+    /// variables: Sequence[Expression]
+    ///     The variables to solve for, in order.
+    /// init: Sequence[Decimal]
+    ///     The initial guess for Newton's method.
+    /// prec: float
+    ///     The numerical tolerance for the Newton iteration.
+    /// max_iterations: int
+    ///     The maximum number of Newton iterations.
     #[pyo3(signature =
         (system,
         variables,
@@ -6235,15 +7061,22 @@ impl PythonExpression {
         }
     }
 
-    /// Evaluate the expression, using a map of all the constants and
-    /// user functions to a complex number.
+    /// Evaluate the expression, using a map of all constants and user functions.
     ///
     /// Examples
     /// --------
-    /// >>> from symbolica import Expression
+    /// >>> from symbolica import *
     /// >>> x, f = S('x', 'f')
     /// >>> e = E('cos(x)')*3 + f(2)
     /// >>> print(e.evaluate({x: 1, f(2): 4.}))
+    ///
+    /// Parameters
+    /// ----------
+    /// constants: dict[Expression, int | float | complex | Decimal | tuple[Decimal, Decimal]]
+    ///     The constant substitutions applied during evaluation.
+    /// decimal_digit_precision: int | None
+    ///     If omitted, uses the f64 backend and returns a complex. If specified,
+    ///     uses arbitrary precision and returns (real, imaginary) as Decimals.
     #[pyo3(signature = (constants, decimal_digit_precision = None))]
     #[gen_stub(override_return_type(type_repr = "complex | tuple[decimal.Decimal, decimal.Decimal]", imports = ("decimal")))]
     pub fn evaluate(
@@ -6485,6 +7318,38 @@ impl PythonExpression {
     /// >>> ev = Expression.evaluator_multiple([e1, e2], [x])
     ///
     /// will recycle the `x^2`
+    ///
+    /// Parameters
+    /// ----------
+    /// exprs: Sequence[Expression]
+    ///     The expressions to compile into a joint evaluator.
+    /// params: Sequence[Expression]
+    ///     The evaluator parameters, in input order.
+    /// functions: dict[tuple[Expression, Sequence[Expression]], Expression]
+    ///     A dictionary of functions. The key is a tuple of the function name and the argument variables.
+    ///     The value is the function body. If the function name entry contains arguments, these are considered tags.
+    /// iterations: int
+    ///     The number of optimization passes to run.
+    /// cpe_iterations: int | None
+    ///     The number of common subexpression elimination iterations to perform.
+    /// n_cores: int
+    ///     The number of CPU cores used for parallel optimization.
+    /// verbose: bool
+    ///     Whether verbose output should be enabled.
+    /// jit_compile: bool
+    ///     Whether JIT compilation should be enabled.
+    /// direct_translation: bool
+    ///     Whether to prefer direct translation when compiling the evaluator.
+    /// jit_direct_translation: bool
+    ///     Whether to directly translate Symbolica instructions to SymJIT IR.
+    /// jit_optimization_level: int
+    ///     The optimization level to use for JIT compilation.
+    /// max_horner_scheme_variables: int
+    ///     The maximum number of variables considered for Horner-scheme optimization.
+    /// max_common_pair_cache_entries: int
+    ///     The maximum number of common-subexpression pairs to cache.
+    /// max_common_pair_distance: int
+    ///     The maximum distance between factors when searching for common pairs.
     #[classmethod]
     #[pyo3(signature =
         (exprs,
@@ -6633,15 +7498,19 @@ impl PythonExpression {
     ///
     /// Examples
     /// --------
-    /// g = S('g', is_symmetric=True)
+    /// >>> g = S('g', is_symmetric=True)
     /// >>> fc = S('fc', is_cyclesymmetric=True)
     /// >>> mu1, mu2, mu3, mu4, k1 = S('mu1', 'mu2', 'mu3', 'mu4', 'k1')
-    /// >>>
     /// >>> e = g(mu2, mu3)*fc(mu4, mu2, k1, mu4, k1, mu3)
-    /// >>>
     /// >>> (r, external, dummy) = e.canonize_tensors([(mu1, 0), (mu2, 0), (mu3, 0), (mu4, 0)])
     /// >>> print(r)
-    /// yields `g(mu1,mu2)*fc(mu1,mu3,mu2,k1,mu3,k1)`.
+    ///
+    /// yields `g(mu1, mu2)*fc(mu1, mu3, mu2, k1, mu3, k1)`.
+    ///
+    /// Parameters
+    /// ----------
+    /// contracted_indices: Sequence[tuple[Expression | int, Expression | int]]
+    ///     The index patterns that should be treated as contracted, optionally grouped by a marker.
     fn canonize_tensors(
         &self,
         contracted_indices: Vec<(ConvertibleToExpression, ConvertibleToExpression)>,
@@ -6883,7 +7752,7 @@ PyMethodsInfo {
             r#type: MethodType::Class,
             r#return: || PythonExpression::type_output(),
             doc:
-r#"Create new symbols from `names`. Symbols can have attributes,
+            r#"Create new symbols from `names`. Symbols can have attributes,
 such as symmetries. If no attributes
 are specified and the symbol was previously defined, the attributes are inherited.
 Once attributes are defined on a symbol, they cannot be redefined later.
@@ -6893,25 +7762,22 @@ Examples
 Define a regular symbol and use it as a variable:
 >>> x = S('x')
 >>> e = x**2 + 5
->>> print(e)
-x**2 + 5
+>>> print(e)  # x**2 + 5
 
 Define a regular symbol and use it as a function:
 >>> f = S('f')
 >>> e = f(1,2)
->>> print(e)
-f(1,2)
+>>> print(e)  # f(1,2)
 
 
 Define a symmetric function:
 >>> f = S('f', is_symmetric=True)
 >>> e = f(2,1)
->>> print(e)
-f(1,2)
+>>> print(e)  # f(1,2)
 
 
 Define a linear and symmetric function:
->>> p1, p2, p3, p4 = ES('p1', 'p2', 'p3', 'p4')
+>>> p1, p2, p3, p4 = S('p1', 'p2', 'p3', 'p4')
 >>> dot = S('dot', is_symmetric=True, is_linear=True)
 >>> e = dot(p2+2*p3,p1+3*p2-p3)
 dot(p1,p2)+2*dot(p1,p3)+3*dot(p2,p2)-dot(p2,p3)+6*dot(p2,p3)-2*dot(p3,p3)
@@ -6921,8 +7787,8 @@ Define a custom normalization function:
 >>> E("real_log(exp(x)) + real_log(5)")
 
 Define a custom print function:
->>> def print_mu(mu: Expression, mode: PrintMode, **kwargs) -> str | None:
->>>     if mode == PrintMode.Latex:
+>>> def print_mu(mu: Expression, latex: bool, **kwargs) -> str | None:
+>>>     if latex:
 >>>         if mu.get_type() == AtomType.Fn:
 >>>             return "\\mu_{" + ",".join(a.format() for a in mu) + "}"
 >>>         else:
@@ -6938,52 +7804,63 @@ Define a custom derivative function:
 >>> x = S('x')
 >>> tag(3, x).derivative(x)
 
-Define a custom series function:
->>> def expand_tag(args: Sequence[Series]) -> tuple[Expression, Expression] | None:
->>>     return E("1/x"), args[0].to_expression()
->>> tag = S("tag", series=expand_tag)
+Define a custom series function that returns the principal part and the regular part,
+or `None` if a standard construction through the derivative can be used:
+>>> def inv_series(args: Sequence[Series]) -> tuple[Expression, Expression] | None:
+>>>     return (N(0), args[0].pow(-1).to_expression())
+>>>
+>>> t = S('t')
+>>> inv = S('inv', series=inv_series)
 
-Define a numeric evaluation function:
->>> sq = S("sq", eval={"complex": lambda args: args[0] * args[0]})
->>> x = S("x")
->>> ev = sq(x).evaluator([x])
->>> ev.evaluate_complex([2+0j])
+Define a function with a custom evaluation:
+>>> cosh = S(
+>>>     "my_cosh",
+>>>     eval={
+>>>         "float": lambda args: math.cosh(args[0]),
+>>>         "complex": lambda args: cmath.cosh(args[0]),
+>>>         "cpp": "template<typename T> T python_my_cosh(T a) { return std::cosh(a); }",
+>>>     },
+>>> )
+
+Add custom data to a symbol:
+>>> x = S('x', data={'my_tag': 'my_value'})
+>>> r = x.get_symbol_data('my_tag')
 
 Parameters
 ----------
 name : str
     The name of the symbol
-is_symmetric : Optional[bool]
+is_symmetric : bool | None
     Set to true if the symbol is symmetric.
-is_antisymmetric : Optional[bool]
+is_antisymmetric : bool | None
     Set to true if the symbol is antisymmetric.
-is_cyclesymmetric : Optional[bool]
+is_cyclesymmetric : bool | None
     Set to true if the symbol is cyclesymmetric.
-is_linear : Optional[bool]
+is_linear : bool | None
     Set to true if the symbol is linear.
-is_scalar : Optional[bool]
+is_scalar : bool | None
     Set to true if the symbol is a scalar. It will be moved out of linear functions.
-is_real : Optional[bool]
+is_real : bool | None
     Set to true if the symbol is a real number.
-is_integer : Optional[bool]
+is_integer : bool | None
     Set to true if the symbol is an integer.
-is_positive : Optional[bool]
+is_positive : bool | None
     Set to true if the symbol is a positive number.
-tags: Optional[Sequence[str]]
+tags: Sequence[str] | None
     A list of tags to associate with the symbol.
-aliases: Optional[Sequence[str]]
-    A list of aliases for the symbol.
-normalization : Optional[Transformer]
+aliases: Sequence[str] | None
+    A list of aliases to associate with the symbol.
+normalization : Transformer | None
     A transformer that is called after every normalization. Note that the symbol
     name cannot be used in the transformer as this will lead to a definition of the
     symbol. Use a wildcard with the same attributes instead.
-print : Optional[Callable[..., Optional[str]]]:
+print : Callable[..., str | None] | None:
     A function that is called when printing the variable/function, which is provided as its first argument.
     This function should return a string, or `None` if the default print function should be used.
     The custom print function takes in keyword arguments that are the same as the arguments of the `format` function.
-derivative: Optional[Callable[[Expression, int], Expression]]:
+derivative: Callable[[Expression, int], Expression] | None:
     A function that is called when computing the derivative of a function in a given argument.
-series: Optional[Callable[[Sequence[Series]], Optional[tuple[Expression, Expression]]]]:
+series: Callable[[Sequence[Series]], tuple[Expression, Expression] | None] | None:
     A function that is called for custom series expansion. It receives the argument series and can return
     the singular factor and regularized expression, or `None` to use the default series expansion.
 eval: dict[str, Any] | None:
@@ -7080,60 +7957,42 @@ data: str | int | Expression | bytes | list | dict | None = None
             r#type: MethodType::Class,
             r#return: || TypeInfo::unqualified("typing.Sequence[Expression]"),
             doc:
-r#"Create new symbols from `names`. Symbols can have attributes,
+            r#"Create new symbols from `names`. Symbols can have attributes,
 such as symmetries. If no attributes
 are specified and the symbol was previously defined, the attributes are inherited.
 Once attributes are defined on a symbol, they cannot be redefined later.
 
 Examples
 --------
-Define a regular symbol and use it as a variable:
->>> x = S('x')
->>> e = x**2 + 5
->>> print(e)
-x**2 + 5
+Define two regular symbols:
+>>> x, y = S('x', 'y')
 
-Define a regular symbol and use it as a function:
->>> f = S('f')
->>> e = f(1,2)
->>> print(e)
-f(1,2)
-
-
-Define a symmetric function:
->>> f = S('f', is_symmetric=True)
+Define two symmetric functions:
+>>> f, g = S('f', 'g', is_symmetric=True)
 >>> e = f(2,1)
->>> print(e)
-f(1,2)
-
-
-Define a linear and symmetric function:
->>> p1, p2, p3, p4 = ES('p1', 'p2', 'p3', 'p4')
->>> dot = S('dot', is_symmetric=True, is_linear=True)
->>> e = dot(p2+2*p3,p1+3*p2-p3)
-dot(p1,p2)+2*dot(p1,p3)+3*dot(p2,p2)-dot(p2,p3)+6*dot(p2,p3)-2*dot(p3,p3)
+>>> print(e)  # f(1,2)
 
 Parameters
 ----------
-name : str
+*names : str
     The name of the symbol
-is_symmetric : Optional[bool]
+is_symmetric : bool | None
     Set to true if the symbol is symmetric.
-is_antisymmetric : Optional[bool]
+is_antisymmetric : bool | None
     Set to true if the symbol is antisymmetric.
-is_cyclesymmetric : Optional[bool]
+is_cyclesymmetric : bool | None
     Set to true if the symbol is cyclesymmetric.
-is_linear : Optional[bool]
-    Set to true if the symbol is linear.
-is_scalar : Optional[bool]
+is_linear : bool | None
+    Set to true if the symbol is multilinear.
+is_scalar : bool | None
     Set to true if the symbol is a scalar. It will be moved out of linear functions.
-is_real : Optional[bool]
+is_real : bool | None
     Set to true if the symbol is a real number.
-is_integer : Optional[bool]
+is_integer : bool | None
     Set to true if the symbol is an integer.
-is_positive : Optional[bool]
+is_positive : bool | None
     Set to true if the symbol is a positive number.
-tags: Optional[Sequence[str]]
+tags: Sequence[str] | None
     A list of tags to associate with the symbol."#,
             is_async: false,
             deprecated: None,
@@ -7168,9 +8027,14 @@ submit! {
                 ],
                 r#type: MethodType::Instance,
                 r#return: || PythonPolynomial::type_output(),
-                doc:"
-Convert the expression to a polynomial, optionally, with the variable ordering specified in `vars`.
-All non-polynomial parts will be converted to new, independent variables.",
+                doc:
+                r#"Convert the expression to a polynomial, optionally, with the variable ordering specified in `vars`.
+All non-polynomial parts will be converted to new, independent variables.
+
+Parameters
+----------
+vars: Sequence[Expression] | None
+    The variables treated as polynomial variables, in the given order."#,
                 is_async: false,
                 deprecated: None,
                 type_ignored: None,
@@ -7194,12 +8058,19 @@ All non-polynomial parts will be converted to new, independent variables.",
                 ],
                 r#type: MethodType::Instance,
                 r#return: || PythonNumberFieldPolynomial::type_output(),
-                doc: "
-Convert the expression to a polynomial, optionally, with the variables and the ordering specified in `vars`.
+                doc:
+                r#"Convert the expression to a polynomial, optionally, with the variables and the ordering specified in `vars`.
 All non-polynomial elements will be converted to new independent variables.
 
 The coefficients will be converted to a number field with the minimal polynomial `minimal_poly`.
-The minimal polynomial must be a monic, irreducible univariate polynomial.",
+The minimal polynomial must be a monic, irreducible univariate polynomial.
+
+Parameters
+----------
+minimal_poly: Polynomial
+    The minimal polynomial that defines the algebraic extension.
+vars: Sequence[Expression] | None
+    The variables treated as polynomial variables, in the given order."#,
                 is_async: false,
                 deprecated: None,
                 type_ignored: None,
@@ -7235,15 +8106,26 @@ The minimal polynomial must be a monic, irreducible univariate polynomial.",
                 ],
                 r#type: MethodType::Instance,
                 r#return: || PythonFiniteFieldPolynomial::type_output(),
-                doc: "
-Convert the expression to a polynomial, optionally, with the variables and the ordering specified in `vars`.
+                doc:
+                r#"Convert the expression to a polynomial, optionally, with the variables and the ordering specified in `vars`.
 All non-polynomial elements will be converted to new independent variables.
 
 The coefficients will be converted to finite field elements modulo `modulus`.
 If on top a `power` is provided, for example `(2, a)`, the polynomial will be converted to the Galois field
 `GF(modulus^2)` where `a` is the variable of the minimal polynomial of the field.
 
-If a `minimal_poly` is provided, the Galois field will be created with `minimal_poly` as the minimal polynomial.",
+If a `minimal_poly` is provided, the Galois field will be created with `minimal_poly` as the minimal polynomial.
+
+Parameters
+----------
+modulus: int
+    The modulus that defines the finite field.
+power: tuple[int, Expression] | None
+    The extension degree and generator that define the finite field.
+minimal_poly: Polynomial | None
+    The minimal polynomial that defines the algebraic extension.
+vars: Sequence[Expression] | None
+    The variables treated as polynomial variables, in the given order."#,
                 is_async: false,
                 deprecated: None,
                 type_ignored: None,
@@ -7276,15 +8158,19 @@ submit! {
                 ],
                 r#type: MethodType::Instance,
                 r#return: || PythonExpression::type_output(),
-                doc:"
-Create a Symbolica expression by calling the function with appropriate arguments.
+                doc:
+                r#"Create a Symbolica expression or transformer by calling the function with appropriate arguments.
 
 Examples
 -------
 >>> x, f = S('x', 'f')
 >>> e = f(3,x)
->>> print(e)
-f(3,x)",
+>>> print(e)  # f(3,x)
+
+Parameters
+----------
+args: Expression | int | float | complex | Decimal
+    The arguments passed to the expression call."#,
                 is_async: false,
                 deprecated: None,
                 type_ignored: None,
@@ -7302,15 +8188,19 @@ f(3,x)",
                 ],
                 r#type: MethodType::Instance,
                 r#return: || PythonHeldExpression::type_output(),
-                doc: "
-Create a Symbolica held expression by calling the function with appropriate arguments.
+                doc:
+                r#"Create a Symbolica expression or transformer by calling the function with appropriate arguments.
 
 Examples
 -------
 >>> x, f = S('x', 'f')
 >>> e = f(3,x)
->>> print(e)
-f(3,x)",
+>>> print(e)  # f(3,x)
+
+Parameters
+----------
+args: HeldExpression | Expression | int | float | complex | Decimal
+    The arguments passed to the expression or transformer call."#,
                 is_async: false,
                 deprecated: None,
                 type_ignored: None,

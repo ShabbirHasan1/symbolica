@@ -318,8 +318,8 @@ def S(
 
     Parameters
     ----------
-    name : str
-        The name of the symbol
+    names : str
+        The names of the symbols.
     is_symmetric : bool | None
         Set to true if the symbol is symmetric.
     is_antisymmetric : bool | None
@@ -10076,7 +10076,7 @@ class Graph:
     @classmethod
     def generate(
         _cls,
-        external_nodes: Sequence[tuple[Expression | int, HalfEdge]],
+        external_edges: Sequence[tuple[Expression | int, HalfEdge]],
         vertex_signatures: Sequence[Sequence[HalfEdge]],
         max_vertices: int | None = None,
         max_loops: int | None = None,
@@ -10112,7 +10112,7 @@ class Graph:
 
         Parameters
         ----------
-        external_nodes: Sequence[tuple[Expression | int, HalfEdge]]
+        external_edges: Sequence[tuple[Expression | int, HalfEdge]]
             The external edges, consisting of a tuple of the node data and a tuple of the edge direction and edge data.
             If the node data is the same, flip symmetries will be recognized.
         vertex_signatures: Sequence[Sequence[HalfEdge]]

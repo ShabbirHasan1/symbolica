@@ -206,6 +206,52 @@ impl PythonPolynomial {
     /// --------
     /// >>> p = FiniteFieldPolynomial.parse("3*x^2+2*x+7*x^3", ['x'], 11)
     /// >>> print(p.format(symmetric_representation_for_finite_field=True))
+    /// Parameters
+    /// ----------
+    /// max_terms: int | None
+    ///     The maximum number of terms to print before truncating the output.
+    /// mode: PrintMode
+    ///     The mode that controls how the input is interpreted or formatted.
+    /// max_line_length: int | None
+    ///     The preferred maximum line length before wrapping.
+    /// indentation: int
+    ///     The number of spaces used for wrapped lines.
+    /// fill_indented_lines: bool
+    ///     Whether wrapped lines should be padded to the configured indentation.
+    /// terms_on_new_line: bool
+    ///     Whether wrapped output should place terms on separate lines.
+    /// color_top_level_sum: bool
+    ///     Whether top-level sums should be colorized.
+    /// color_builtin_symbols: bool
+    ///     Whether built-in symbols should be colorized.
+    /// bracket_level_colors: Sequence[int] | None
+    ///     The colors assigned to successive nested bracket levels.
+    /// print_ring: bool
+    ///     Whether the coefficient ring should be included in the printed output.
+    /// symmetric_representation_for_finite_field: bool
+    ///     Whether finite-field elements should be printed using symmetric representatives.
+    /// explicit_rational_polynomial: bool
+    ///     Whether rational polynomials should be printed explicitly as numerator and denominator.
+    /// number_thousands_separator: str | None
+    ///     The separator inserted between groups of digits in printed integers.
+    /// multiplication_operator: str
+    ///     The string used to print multiplication.
+    /// double_star_for_exponentiation: bool
+    ///     Whether exponentiation should be printed as `**` instead of `^`.
+    /// function_brackets: tuple[str, str]
+    ///     The opening and closing brackets used when printing function arguments.
+    /// num_exp_as_superscript: bool
+    ///     Whether small integer exponents should be printed as superscripts.
+    /// precision: int | None
+    ///     The decimal precision used when printing numeric coefficients.
+    /// show_namespaces: bool
+    ///     Whether namespaces should be included in the formatted output.
+    /// hide_namespace: str | None
+    ///     A namespace prefix to omit from printed symbol names.
+    /// include_attributes: bool
+    ///     Whether symbol attributes should be included in the printed output.
+    /// custom_print_mode: dict[str, int | str | dict[str | int, Any]] | None
+    ///     Custom print data passed through to custom print callbacks.
     #[pyo3(signature =
         (max_terms = None,
             mode = PythonPrintMode::Symbolica,
@@ -513,7 +559,12 @@ impl PythonPolynomial {
         Ok(var_list)
     }
 
-    /// Add two polynomials `self and `rhs`, returning the result.
+    /// Add two polynomials `self` and `rhs`, returning the result.
+    ///
+    /// Parameters
+    /// ----------
+    /// rhs: Polynomial | int
+    ///     The right-hand-side operand.
     pub fn __add__(&self, rhs: PolynomialOrInteger<PythonPolynomial>) -> PyResult<Self> {
         match rhs {
             PolynomialOrInteger::Polynomial(p) => {
@@ -534,6 +585,11 @@ impl PythonPolynomial {
     }
 
     /// Subtract polynomials `rhs` from `self`, returning the result.
+    ///
+    /// Parameters
+    /// ----------
+    /// rhs: Polynomial | int
+    ///     The right-hand-side operand.
     pub fn __sub__(&self, rhs: PolynomialOrInteger<PythonPolynomial>) -> PyResult<Self> {
         match rhs {
             PolynomialOrInteger::Polynomial(p) => {
@@ -553,7 +609,12 @@ impl PythonPolynomial {
         }
     }
 
-    /// Multiply two polynomials `self and `rhs`, returning the result.
+    /// Multiply two polynomials `self` and `rhs`, returning the result.
+    ///
+    /// Parameters
+    /// ----------
+    /// rhs: Polynomial | int
+    ///     The right-hand-side operand.
     pub fn __mul__(&self, rhs: PolynomialOrInteger<PythonPolynomial>) -> PyResult<Self> {
         match rhs {
             PolynomialOrInteger::Polynomial(p) => {
@@ -617,6 +678,11 @@ impl PythonPolynomial {
     }
 
     /// Divide the polynomial `self` by `rhs` if possible, returning the result.
+    ///
+    /// Parameters
+    /// ----------
+    /// rhs: Polynomial
+    ///     The right-hand-side operand.
     pub fn __truediv__(&self, rhs: Self) -> PyResult<Self> {
         if rhs.poly.is_zero() {
             return Err(exceptions::PyValueError::new_err("Division by zero"));
@@ -682,8 +748,12 @@ impl PythonPolynomial {
         Ok(self.poly.degree(x) as isize)
     }
 
-    /// Set a new variable ordering for the polynomial.
-    /// This can be used to introduce new variables as well.
+    /// Reorder the polynomial in-place to use the given variable order.
+    ///
+    /// Parameters
+    /// ----------
+    /// order: Sequence[Expression]
+    ///     The variables treated as polynomial variables, in the given order.
     pub fn reorder(&mut self, order: Vec<PythonExpression>) -> PyResult<()> {
         let vars: Vec<PolyVariable> = order
             .into_iter()
@@ -698,6 +768,11 @@ impl PythonPolynomial {
     }
 
     /// Divide `self` by `rhs`, returning the quotient and remainder.
+    ///
+    /// Parameters
+    /// ----------
+    /// rhs: Polynomial
+    ///     The right-hand-side operand.
     pub fn quot_rem(&self, rhs: Self) -> PyResult<(PythonPolynomial, PythonPolynomial)> {
         if self.poly.ring != rhs.poly.ring {
             return Err(exceptions::PyValueError::new_err(
@@ -720,7 +795,12 @@ impl PythonPolynomial {
         }
     }
 
-    /// Compute the remainder `self % rhs.
+    /// Compute the remainder of the division of `self` by `rhs`.
+    ///
+    /// Parameters
+    /// ----------
+    /// rhs: Polynomial
+    ///     The right-hand-side operand.
     pub fn __mod__(&self, rhs: Self) -> PyResult<Self> {
         if self.poly.ring != rhs.poly.ring {
             return Err(exceptions::PyValueError::new_err(
@@ -738,6 +818,11 @@ impl PythonPolynomial {
     }
 
     /// Compute the greatest common divisor (GCD) of two or more polynomials.
+    ///
+    /// Parameters
+    /// ----------
+    /// rhs: Polynomial
+    ///     The right-hand-side operand.
     #[pyo3(signature = (*rhs))]
     pub fn gcd(
         &self,
@@ -782,6 +867,11 @@ impl PythonPolynomial {
     /// >>> E('(1+x)(20+x)').to_polynomial().extended_gcd(E('x^2+2').to_polynomial())
     ///
     /// yields `(1, 1/67-7/402*x, 47/134+7/402*x)`.
+    ///
+    /// Parameters
+    /// ----------
+    /// rhs: Polynomial
+    ///     The right-hand-side operand.
     pub fn extended_gcd(
         &self,
         rhs: Self,
@@ -808,6 +898,13 @@ impl PythonPolynomial {
     }
 
     /// Compute the resultant of two polynomials with respect to the variable `var`.
+    ///
+    /// Parameters
+    /// ----------
+    /// rhs: Polynomial
+    ///     The right-hand-side operand.
+    /// var: Expression
+    ///     The variable with respect to which the resultant is computed.
     pub fn resultant(&self, rhs: Self, var: &PythonExpression) -> PyResult<Self> {
         let x = self
             .poly
@@ -885,10 +982,15 @@ impl PythonPolynomial {
     /// Examples
     /// --------
     ///
-    /// >>> from symbolica import Expression
+    /// >>> from symbolica import *
     /// >>> x = S('x')
     /// >>> p = E('x^2+2').to_polynomial()
     /// >>> print(p.derivative(x))
+    ///
+    /// Parameters
+    /// ----------
+    /// x: Expression
+    ///     The variable with respect to which to differentiate.
     pub fn derivative(&self, x: PythonExpression) -> PyResult<Self> {
         let x = self
             .poly
@@ -975,11 +1077,16 @@ impl PythonPolynomial {
     /// Examples
     /// --------
     ///
-    /// >>> from symbolica import Expression
+    /// >>> from symbolica import *
     /// >>> x = S('x')
     /// >>> p = E('x*y+2*x+x^2').to_polynomial()
     /// >>> for n, pp in p.coefficient_list(x):
     /// >>>     print(n, pp)
+    ///
+    /// Parameters
+    /// ----------
+    /// vars: Expression | Sequence[Expression] | None
+    ///     The variables with respect to which coefficients should be listed.
     #[pyo3(signature = (vars = None))]
     pub fn coefficient_list(
         &self,
@@ -1063,7 +1170,7 @@ impl PythonPolynomial {
         }
     }
 
-    /// Evaluate the polynomial at point `input`.
+    /// Evaluate the polynomial at point `inputs`.
     ///
     /// Examples
     /// --------
@@ -1072,6 +1179,11 @@ impl PythonPolynomial {
     /// >>> P('x*y+2*x+x^2').evaluate([2., 3.])
     ///
     /// Yields `14.0`.
+    ///
+    /// Parameters
+    /// ----------
+    /// inputs: npt.ArrayLike
+    ///     The input value.
     fn evaluate<'py>(
         &mut self,
         #[gen_stub(override_type(
@@ -1095,7 +1207,7 @@ impl PythonPolynomial {
         Ok(self.poly.evaluate(|c| c.to_f64(), input))
     }
 
-    /// Evaluate the polynomial at point `input` with complex input.
+    /// Evaluate the polynomial at point `inputs` with complex input.
     ///
     /// Examples
     /// --------
@@ -1104,6 +1216,11 @@ impl PythonPolynomial {
     /// >>> P('x*y+2*x+x^2').evaluate([2+1j, 3+2j])
     ///
     /// Yields `11+13j`.
+    ///
+    /// Parameters
+    /// ----------
+    /// inputs: npt.ArrayLike
+    ///     The input value.
     fn evaluate_complex<'py>(
         &mut self,
         #[gen_stub(override_type(
@@ -1135,11 +1252,18 @@ impl PythonPolynomial {
     /// Examples
     /// --------
     ///
-    /// >>> from symbolica import Expression
+    /// >>> from symbolica import *
     /// >>> x = S('x')
     /// >>> p = E('x*y+2*x+x^2').to_polynomial()
     /// >>> r = E('y+1').to_polynomial()
     /// >>> p.replace(x, r)
+    ///
+    /// Parameters
+    /// ----------
+    /// x: Expression
+    ///     The variable to replace.
+    /// v: Polynomial | int
+    ///     The polynomial or scalar value that should replace `x`.
     pub fn replace(&self, x: PythonExpression, v: PolynomialOrInteger<Self>) -> PyResult<Self> {
         let var: PolyVariable = x
             .expr
@@ -1176,7 +1300,7 @@ impl PythonPolynomial {
         }
     }
 
-    /// Parse a polynomial with rational coefficients from a string.
+    /// Parse a polynomial with integer coefficients from a string.
     /// The input must be written in an expanded format and a list of all
     /// the variables must be provided.
     ///
@@ -1185,7 +1309,16 @@ impl PythonPolynomial {
     ///
     /// Examples
     /// --------
-    /// >>> e = Polynomial.parse('3/4*x^2+y+y*4', ['x', 'y'])
+    /// >>> e = Polynomial.parse('3*x^2+y+y*4', ['x', 'y'])
+    ///
+    /// Parameters
+    /// ----------
+    /// arg: str
+    ///     The input value.
+    /// vars: Sequence[str]
+    ///     The variables treated as polynomial variables, in the given order.
+    /// default_namespace: str | None
+    ///     The namespace assumed for unqualified symbols during parsing.
     ///
     /// Raises
     /// ------
@@ -1242,7 +1375,7 @@ impl PythonPolynomial {
     /// >>>     print('({},{}): {}'.format(a, b, n))
     ///
     /// yields
-    /// ```text
+    /// ```
     /// (-56/45,-77/62): 1
     /// (-98/79,-119/96): 1
     /// (-119/96,-21/17): 1
@@ -1250,6 +1383,11 @@ impl PythonPolynomial {
     /// (0,6): 1
     /// (6,12): 1
     /// ```
+    ///
+    /// Parameters
+    /// ----------
+    /// refine: float | Decimal | None
+    ///     The optional interval refinement tolerance.
     #[pyo3(signature = (refine = None))]
     pub fn isolate_roots(
         &self,
@@ -1290,6 +1428,13 @@ impl PythonPolynomial {
     /// >>> p = E('x^10+9x^7+4x^3+2x+1').to_polynomial()
     /// >>> for (r, m) in p.approximate_roots(1000, 1e-10):
     /// >>>     print(r, m)
+    ///
+    /// Parameters
+    /// ----------
+    /// max_iterations: int
+    ///     The maximum number of iterations for the root finder.
+    /// tolerance: float
+    ///     The convergence tolerance for the root finder.
     pub fn approximate_roots<'py>(
         &self,
         max_iterations: usize,
@@ -1322,6 +1467,11 @@ impl PythonPolynomial {
     }
 
     /// Convert the coefficients of the polynomial to a finite field with prime `prime`.
+    ///
+    /// Parameters
+    /// ----------
+    /// prime: int
+    ///     The prime modulus of the target finite field.
     pub fn to_finite_field(&self, prime: u64, py: Python<'_>) -> PyResult<Py<PyAny>> {
         if prime == 2 {
             PythonPrimeTwoPolynomial {
@@ -1352,14 +1502,23 @@ impl PythonPolynomial {
     /// --------
     /// >>> basis = Polynomial.groebner_basis(
     /// >>>     [E("a b c d - 1").to_polynomial(),
-    /// >>>      E("a b c + a b d + a c d + b c d").to_polynomial(),
-    /// >>>      E("a b + b c + a d + c d").to_polynomial(),
-    /// >>>      E("a + b + c + d").to_polynomial()],
+    /// >>>     E("a b c + a b d + a c d + b c d").to_polynomial(),
+    /// >>>     E("a b + b c + a d + c d").to_polynomial(),
+    /// >>>     E("a + b + c + d").to_polynomial()],
     /// >>>     grevlex=True,
     /// >>>     print_stats=True
     /// >>> )
     /// >>> for p in basis:
     /// >>>     print(p)
+    ///
+    /// Parameters
+    /// ----------
+    /// system: Sequence[Polynomial]
+    ///     The equations or polynomials that define the system.
+    /// grevlex: bool
+    ///     Whether graded reverse lexicographic ordering should be used.
+    /// print_stats: bool
+    ///     Whether Groebner basis statistics should be printed during computation.
     #[pyo3(signature = (system, grevlex = true, print_stats = false))]
     #[classmethod]
     pub fn groebner_basis(
@@ -1388,8 +1547,23 @@ impl PythonPolynomial {
         }
     }
 
-    /// Completely reduce the polynomial w.r.t the polynomials `gs`.
-    /// For example reducing `f=y^2+x` by `g=[x]` yields `y^2`.
+    /// Completely reduce the polynomial w.r.t. the polynomials `system`.
+    ///
+    /// If `grevlex=True`, reverse graded lexicographical ordering is used,
+    /// otherwise the ordering is lexicographical.
+    ///
+    /// Examples
+    /// --------
+    /// >>> E('y^2+x').to_polynomial().reduce([E('x').to_polynomial()])
+    ///
+    /// yields `y^2`
+    ///
+    /// Parameters
+    /// ----------
+    /// system: Sequence[Polynomial]
+    ///     The polynomials that define the reducing set.
+    /// grevlex: bool
+    ///     Whether graded reverse lexicographic ordering should be used.
     #[pyo3(signature = (system, grevlex = true))]
     pub fn reduce(&self, system: Vec<Self>, grevlex: bool) -> Self {
         if grevlex {
@@ -1416,10 +1590,15 @@ impl PythonPolynomial {
     /// Examples
     /// --------
     ///
-    /// >>> from symbolica import Expression
+    /// >>> from symbolica import *
     /// >>> x = S('x')
     /// >>> p = E('x^2+2').to_polynomial()
     /// >>> print(p.integrate(x))
+    ///
+    /// Parameters
+    /// ----------
+    /// x: Expression
+    ///     The variable with respect to which to integrate.
     pub fn integrate(&self, x: PythonExpression) -> PyResult<Self> {
         let x = self
             .poly
@@ -1462,9 +1641,15 @@ impl PythonPolynomial {
     /// >>> x, y = S('x', 'y')
     /// >>> a = Polynomial.interpolate(
     /// >>>         x, [4, 5], [(y**2+5).to_polynomial(), (y**3).to_polynomial()])
-    /// >>> print(a)
-    ///
-    /// yields `25-5*x+5*y^2-y^2*x-4*y^3+y^3*x`.
+    /// >>> print(a)  # 25-5*x+5*y^2-y^2*x-4*y^3+y^3*x
+    /// Parameters
+    /// ----------
+    /// x: Expression
+    ///     The interpolation variable.
+    /// sample_points: Sequence[Expression | int]
+    ///     The sample points used for interpolation.
+    /// values: Sequence[Polynomial]
+    ///     The values associated with the sample points.
     #[classmethod]
     pub fn interpolate(
         _cls: &Bound<'_, PyType>,
@@ -1539,16 +1724,17 @@ impl PythonPolynomial {
         })
     }
 
-    /// Convert the polynomial to a number field defined by the minimal polynomial `minimal_poly`.
+    /// Convert the coefficients of the polynomial to a number field defined by the minimal polynomial `minimal_poly`.
     ///
     /// Examples
     /// --------
-    ///
     /// >>> from symbolica import *
     /// >>> a = P('a').to_number_field(P('a^2-2'))
-    /// >>> print(a * a)
-    ///
-    /// Yields `2`.
+    /// >>> print(a * a)  # 2
+    /// Parameters
+    /// ----------
+    /// minimal_poly: Polynomial
+    ///     The minimal polynomial that defines the algebraic extension.
     pub fn to_number_field(&self, minimal_poly: Self) -> PyResult<PythonNumberFieldPolynomial> {
         let a = AlgebraicExtension::new(minimal_poly.poly.clone());
         let poly_nf = self.poly.to_number_field(&a);
@@ -1573,7 +1759,14 @@ impl PythonPolynomial {
     /// >>> (min_poly, rep2, rep23) = sqrt2.adjoin(sqrt23)
     /// >>>
     /// >>> # convert to number field
-    /// >>> a = P('a^2+b').replace(S('a'), rep2).replace(S('b'), rep23).to_number_field(min_poly)
+    /// >>> a = P('a^2+b').replace(S('b'), rep23).replace(S('a'), rep2).to_number_field(min_poly)
+    ///
+    /// Parameters
+    /// ----------
+    /// b: Polynomial
+    ///     The polynomial that defines the extension to adjoin.
+    /// new_symbol: Expression | None
+    ///     The symbol chosen for the adjoined generator.
     #[pyo3(signature = (b, new_symbol = None))]
     pub fn adjoin(
         &self,
@@ -1610,6 +1803,11 @@ impl PythonPolynomial {
     /// >>> rep2.simplify_algebraic_number(min_poly)
     ///
     /// Yields `b^2-2`.
+    ///
+    /// Parameters
+    /// ----------
+    /// minimal_poly: Polynomial
+    ///     The minimal polynomial that defines the algebraic extension.
     pub fn simplify_algebraic_number(&self, minimal_poly: Self) -> PyResult<Self> {
         let a = AlgebraicExtension::new(minimal_poly.poly);
         let m = a.try_to_element(self.poly.clone()).map_err(|e| {
@@ -1895,7 +2093,12 @@ impl PythonFiniteFieldPolynomial {
         Ok(var_list)
     }
 
-    /// Add two polynomials `self and `rhs`, returning the result.
+    /// Add two polynomials `self` and `rhs`, returning the result.
+    ///
+    /// Parameters
+    /// ----------
+    /// rhs: FiniteFieldPolynomial | int
+    ///     The right-hand-side operand.
     pub fn __add__(&self, rhs: PolynomialOrInteger<Self>) -> PyResult<Self> {
         match rhs {
             PolynomialOrInteger::Polynomial(p) => {
@@ -1919,6 +2122,11 @@ impl PythonFiniteFieldPolynomial {
     }
 
     /// Subtract polynomials `rhs` from `self`, returning the result.
+    ///
+    /// Parameters
+    /// ----------
+    /// rhs: FiniteFieldPolynomial | int
+    ///     The right-hand-side operand.
     pub fn __sub__(&self, rhs: PolynomialOrInteger<Self>) -> PyResult<Self> {
         match rhs {
             PolynomialOrInteger::Polynomial(p) => {
@@ -1941,7 +2149,12 @@ impl PythonFiniteFieldPolynomial {
         }
     }
 
-    /// Multiply two polynomials `self and `rhs`, returning the result.
+    /// Multiply two polynomials `self` and `rhs`, returning the result.
+    ///
+    /// Parameters
+    /// ----------
+    /// rhs: FiniteFieldPolynomial | int
+    ///     The right-hand-side operand.
     pub fn __mul__(&self, rhs: PolynomialOrInteger<Self>) -> PyResult<Self> {
         match rhs {
             PolynomialOrInteger::Polynomial(p) => {
@@ -2012,6 +2225,11 @@ impl PythonFiniteFieldPolynomial {
     }
 
     /// Divide the polynomial `self` by `rhs` if possible, returning the result.
+    ///
+    /// Parameters
+    /// ----------
+    /// rhs: FiniteFieldPolynomial
+    ///     The right-hand-side operand.
     pub fn __truediv__(&self, rhs: Self) -> PyResult<Self> {
         if rhs.poly.is_zero() {
             return Err(exceptions::PyValueError::new_err("Division by zero"));
@@ -2077,8 +2295,12 @@ impl PythonFiniteFieldPolynomial {
         Ok(self.poly.degree(x) as isize)
     }
 
-    /// Set a new variable ordering for the polynomial.
-    /// This can be used to introduce new variables as well.
+    /// Reorder the polynomial in-place to use the given variable order.
+    ///
+    /// Parameters
+    /// ----------
+    /// order: Sequence[Expression]
+    ///     The variables treated as polynomial variables, in the given order.
     pub fn reorder(&mut self, order: Vec<PythonExpression>) -> PyResult<()> {
         let vars: Vec<PolyVariable> = order
             .into_iter()
@@ -2094,6 +2316,11 @@ impl PythonFiniteFieldPolynomial {
     }
 
     /// Divide `self` by `rhs`, returning the quotient and remainder.
+    ///
+    /// Parameters
+    /// ----------
+    /// rhs: FiniteFieldPolynomial
+    ///     The right-hand-side operand.
     pub fn quot_rem(
         &self,
         rhs: Self,
@@ -2119,7 +2346,12 @@ impl PythonFiniteFieldPolynomial {
         }
     }
 
-    /// Compute the remainder `self % rhs.
+    /// Compute the remainder of the division of `self` by `rhs`.
+    ///
+    /// Parameters
+    /// ----------
+    /// rhs: FiniteFieldPolynomial
+    ///     The right-hand-side operand.
     pub fn __mod__(&self, rhs: Self) -> PyResult<Self> {
         if self.poly.ring != rhs.poly.ring {
             return Err(exceptions::PyValueError::new_err(
@@ -2137,6 +2369,11 @@ impl PythonFiniteFieldPolynomial {
     }
 
     /// Compute the greatest common divisor (GCD) of two or more polynomials.
+    ///
+    /// Parameters
+    /// ----------
+    /// rhs: FiniteFieldPolynomial
+    ///     The right-hand-side operand.
     #[pyo3(signature = (*rhs))]
     pub fn gcd(
         &self,
@@ -2181,6 +2418,11 @@ impl PythonFiniteFieldPolynomial {
     /// >>> E('(1+x)(20+x)').to_polynomial(modulus=5).extended_gcd(E('x^2+2').to_polynomial(modulus=5))
     ///
     /// yields `(1, 3+4*x, 3+x)`.
+    ///
+    /// Parameters
+    /// ----------
+    /// rhs: FiniteFieldPolynomial
+    ///     The right-hand-side operand.
     pub fn extended_gcd(
         &self,
         rhs: Self,
@@ -2210,7 +2452,12 @@ impl PythonFiniteFieldPolynomial {
         Ok((Self { poly: g }, Self { poly: s }, Self { poly: t }))
     }
 
-    /// Convert the finite field polynomial to a polynomial with integer coefficients.
+    /// Convert the polynomial to a polynomial with integer coefficients.
+    ///
+    /// Parameters
+    /// ----------
+    /// symmetric_representation: bool
+    ///     Whether finite-field coefficients should use symmetric integer representatives.
     #[pyo3(signature = (symmetric_representation = true))]
     pub fn to_integer_polynomial(&self, symmetric_representation: bool) -> PythonPolynomial {
         PythonPolynomial {
@@ -2225,6 +2472,13 @@ impl PythonFiniteFieldPolynomial {
     }
 
     /// Compute the resultant of two polynomials with respect to the variable `var`.
+    ///
+    /// Parameters
+    /// ----------
+    /// rhs: FiniteFieldPolynomial
+    ///     The right-hand-side operand.
+    /// var: Expression
+    ///     The variable with respect to which the resultant is computed.
     pub fn resultant(&self, rhs: Self, var: PythonExpression) -> PyResult<Self> {
         let x = self
             .poly
@@ -2302,10 +2556,15 @@ impl PythonFiniteFieldPolynomial {
     /// Examples
     /// --------
     ///
-    /// >>> from symbolica import Expression
+    /// >>> from symbolica import *
     /// >>> x = S('x')
     /// >>> p = E('x^2+2').to_polynomial()
     /// >>> print(p.derivative(x))
+    ///
+    /// Parameters
+    /// ----------
+    /// x: Expression
+    ///     The variable with respect to which to differentiate.
     pub fn derivative(&self, x: PythonExpression) -> PyResult<Self> {
         let x = self
             .poly
@@ -2367,11 +2626,16 @@ impl PythonFiniteFieldPolynomial {
     /// Examples
     /// --------
     ///
-    /// >>> from symbolica import Expression
+    /// >>> from symbolica import *
     /// >>> x = S('x')
     /// >>> p = E('x*y+2*x+x^2').to_polynomial()
     /// >>> for n, pp in p.coefficient_list(x):
     /// >>>     print(n, pp)
+    ///
+    /// Parameters
+    /// ----------
+    /// vars: Expression | Sequence[Expression] | None
+    ///     The variables with respect to which coefficients should be listed.
     #[pyo3(signature = (vars = None))]
     pub fn coefficient_list(
         &self,
@@ -2455,16 +2719,20 @@ impl PythonFiniteFieldPolynomial {
         }
     }
 
-    /// Evaluate the polynomial at the given values.
+    /// Evaluate the polynomial at point `values`.
     ///
     /// Examples
     /// --------
     ///
     /// >>> from symbolica import *
-    /// >>> x, y = S('x', 'y')
-    /// >>> p = E('x*y+2*x+x^2').to_polynomial(modulus=5)
-    /// >>> print(p.evaluate([2, 3]))
-    /// 4
+    /// >>> P('x*y+2*x+x^2', modulus=5).evaluate([2, 3])
+    ///
+    /// Yields `4`.
+    ///
+    /// Parameters
+    /// ----------
+    /// values: Sequence[int]
+    ///     The input value.
     pub fn evaluate(&self, values: Vec<Integer>) -> PyResult<Integer> {
         if values.len() != self.poly.get_vars_ref().len() {
             return Err(exceptions::PyValueError::new_err(format!(
@@ -2489,11 +2757,17 @@ impl PythonFiniteFieldPolynomial {
     /// Examples
     /// --------
     ///
-    /// >>> from symbolica import Expression
-    /// >>> x = S('x')
+    /// >>> from symbolica import *
     /// >>> p = E('x*y+2*x+x^2').to_polynomial()
     /// >>> r = E('y+1').to_polynomial()
-    /// >>> p.replace(x, r)
+    /// >>> p.replace(S('x'), r)
+    ///
+    /// Parameters
+    /// ----------
+    /// x: Expression
+    ///     The variable to replace.
+    /// v: FiniteFieldPolynomial | int
+    ///     The polynomial or scalar value that should replace `x`.
     pub fn replace(&self, x: PythonExpression, v: PolynomialOrInteger<Self>) -> PyResult<Self> {
         let id = match x.expr.as_view() {
             AtomView::Var(x) => x.get_symbol(),
@@ -2540,10 +2814,25 @@ impl PythonFiniteFieldPolynomial {
 
     /// Compute the Groebner basis of a polynomial system.
     ///
-    /// If `grevlex=True`, reverse graded lexicographical ordering is used,
-    /// otherwise the ordering is lexicographical.
+    /// Examples
+    /// --------
+    /// >>> basis = Polynomial.groebner_basis(
+    /// >>>     [E("a b c d - 1").to_polynomial(),
+    /// >>>     E("a b c + a b d + a c d + b c d").to_polynomial(),
+    /// >>>     E("a b + b c + a d + c d").to_polynomial(),
+    /// >>>     E("a + b + c + d").to_polynomial()],
+    /// >>>     grevlex=True,
+    /// >>>     print_stats=True
+    /// >>> )
+    /// >>> for p in basis:
+    /// >>>     print(p)
     ///
-    /// If `print_stats=True` intermediate statistics will be printed.
+    /// Parameters
+    /// ----------
+    /// grevlex: bool
+    ///     If `True`, reverse graded lexicographical ordering is used, otherwise the ordering is lexicographical.
+    /// print_stats: bool
+    ///     If `True`, intermediate statistics will be printed.
     #[pyo3(signature = (system, grevlex = true, print_stats = false))]
     #[classmethod]
     pub fn groebner_basis(
@@ -2572,8 +2861,23 @@ impl PythonFiniteFieldPolynomial {
         }
     }
 
-    /// Completely reduce the polynomial w.r.t the polynomials `gs`.
-    /// For example reducing `f=y^2+x` by `g=[x]` yields `y^2`.
+    /// Completely reduce the polynomial w.r.t. the polynomials `system`.
+    ///
+    /// If `grevlex=True`, reverse graded lexicographical ordering is used,
+    /// otherwise the ordering is lexicographical.
+    ///
+    /// Examples
+    /// --------
+    /// >>> E('y^2+x').to_polynomial().reduce([E('x').to_polynomial()])
+    ///
+    /// yields `y^2`
+    ///
+    /// Parameters
+    /// ----------
+    /// system: Sequence[Polynomial]
+    ///     The polynomials that define the reducing set.
+    /// grevlex: bool
+    ///     Whether graded reverse lexicographic ordering should be used.
     #[pyo3(signature = (system, grevlex = true))]
     pub fn reduce(&self, system: Vec<Self>, grevlex: bool) -> Self {
         if grevlex {
@@ -2600,10 +2904,15 @@ impl PythonFiniteFieldPolynomial {
     /// Examples
     /// --------
     ///
-    /// >>> from symbolica import Expression
+    /// >>> from symbolica import *
     /// >>> x = S('x')
     /// >>> p = E('x^2+2').to_polynomial()
     /// >>> print(p.integrate(x))
+    ///
+    /// Parameters
+    /// ----------
+    /// x: Expression
+    ///     The variable with respect to which to integrate.
     pub fn integrate(&self, x: PythonExpression) -> PyResult<Self> {
         let x = self
             .poly
@@ -2633,7 +2942,18 @@ impl PythonFiniteFieldPolynomial {
     ///
     /// Examples
     /// --------
-    /// >>> e = Polynomial.parse('3*x^2+y+y*4', ['x', 'y'], 5)
+    /// >>> e = FiniteFieldPolynomial.parse('18*x^2+y+y*4', ['x', 'y'], 17)
+    ///
+    /// Parameters
+    /// ----------
+    /// arg: str
+    ///     The input value.
+    /// vars: Sequence[str]
+    ///     The variables treated as polynomial variables, in the given order.
+    /// prime: int
+    ///     The prime modulus of the finite field.
+    /// default_namespace: str | None
+    ///     The namespace assumed for unqualified symbols during parsing.
     ///
     /// Raises
     /// ------
@@ -2694,7 +3014,12 @@ impl PythonFiniteFieldPolynomial {
         Ok(p.to_expression().into())
     }
 
-    /// Convert the polynomial to a Galois field defined by the minimal polynomial `minimal_poly`.
+    /// Convert the coefficients of the polynomial to a Galois field defined by the minimal polynomial `minimal_poly`.
+    ///
+    /// Parameters
+    /// ----------
+    /// minimal_poly: FiniteFieldPolynomial
+    ///     The minimal polynomial that defines the algebraic extension.
     pub fn to_galois_field(&self, minimal_poly: Self) -> PyResult<PythonGaloisFieldPolynomial> {
         if self.poly.ring != minimal_poly.poly.ring {
             return Err(exceptions::PyValueError::new_err(
@@ -2715,6 +3040,13 @@ impl PythonFiniteFieldPolynomial {
     ///
     /// If `new_symbol` is provided, the variable of the new extension will be renamed to it.
     /// Otherwise, the variable of the new extension will be the same as that of `b`.
+    ///
+    /// Parameters
+    /// ----------
+    /// b: FiniteFieldPolynomial
+    ///     The finite-field polynomial that defines the extension to adjoin.
+    /// new_symbol: Expression | None
+    ///     The symbol chosen for the adjoined generator.
     #[pyo3(signature = (b, new_symbol = None))]
     pub fn adjoin(
         &self,
@@ -2753,14 +3085,10 @@ impl PythonFiniteFieldPolynomial {
     /// Find the minimal polynomial for the algebraic number represented by this polynomial
     /// expressed in the number field defined by `minimal_poly`.
     ///
-    /// Examples
-    /// --------
-    ///
-    /// >>> from symbolica import *
-    /// >>> (min_poly, rep2, rep23) = P('a^2-2').adjoin(P('b^2-3'))
-    /// >>> rep2.simplify_algebraic_number(min_poly)
-    ///
-    /// Yields `b^2-2`.
+    /// Parameters
+    /// ----------
+    /// minimal_poly: FiniteFieldPolynomial
+    ///     The minimal polynomial that defines the algebraic extension.
     pub fn simplify_algebraic_number(&self, minimal_poly: Self) -> PyResult<Self> {
         let a = AlgebraicExtension::new(minimal_poly.poly);
         let m = a.try_to_element(self.poly.clone()).map_err(|e| {
@@ -3637,7 +3965,7 @@ impl PythonPrimeTwoPolynomial {
         }
     }
 
-    /// Completely reduce the polynomial w.r.t the polynomials `gs`.
+    /// Completely reduce the polynomial w.r.t. the polynomials `system`.
     /// For example reducing `f=y^2+x` by `g=[x]` yields `y^2`.
     #[pyo3(signature = (system, grevlex = true))]
     pub fn reduce(&self, system: Vec<Self>, grevlex: bool) -> Self {
@@ -4630,7 +4958,7 @@ impl PythonGaloisFieldPrimeTwoPolynomial {
         }
     }
 
-    /// Completely reduce the polynomial w.r.t the polynomials `gs`.
+    /// Completely reduce the polynomial w.r.t. the polynomials `system`.
     /// For example reducing `f=y^2+x` by `g=[x]` yields `y^2`.
     #[pyo3(signature = (system, grevlex = true))]
     pub fn reduce(&self, system: Vec<Self>, grevlex: bool) -> Self {
@@ -5597,7 +5925,7 @@ impl PythonGaloisFieldPolynomial {
         }
     }
 
-    /// Completely reduce the polynomial w.r.t the polynomials `gs`.
+    /// Completely reduce the polynomial w.r.t. the polynomials `system`.
     /// For example reducing `f=y^2+x` by `g=[x]` yields `y^2`.
     #[pyo3(signature = (system, grevlex = true))]
     pub fn reduce(&self, system: Vec<Self>, grevlex: bool) -> Self {
@@ -5971,7 +6299,12 @@ impl PythonNumberFieldPolynomial {
         Ok(var_list)
     }
 
-    /// Add two polynomials `self and `rhs`, returning the result.
+    /// Add two polynomials `self` and `rhs`, returning the result.
+    ///
+    /// Parameters
+    /// ----------
+    /// rhs: NumberFieldPolynomial | int
+    ///     The right-hand-side operand.
     pub fn __add__(&self, rhs: PolynomialOrInteger<Self>) -> PyResult<Self> {
         match rhs {
             PolynomialOrInteger::Polynomial(p) => {
@@ -5995,6 +6328,11 @@ impl PythonNumberFieldPolynomial {
     }
 
     /// Subtract polynomials `rhs` from `self`, returning the result.
+    ///
+    /// Parameters
+    /// ----------
+    /// rhs: NumberFieldPolynomial | int
+    ///     The right-hand-side operand.
     pub fn __sub__(&self, rhs: PolynomialOrInteger<Self>) -> PyResult<Self> {
         match rhs {
             PolynomialOrInteger::Polynomial(p) => {
@@ -6017,7 +6355,12 @@ impl PythonNumberFieldPolynomial {
         }
     }
 
-    /// Multiply two polynomials `self and `rhs`, returning the result.
+    /// Multiply two polynomials `self` and `rhs`, returning the result.
+    ///
+    /// Parameters
+    /// ----------
+    /// rhs: NumberFieldPolynomial | int
+    ///     The right-hand-side operand.
     pub fn __mul__(&self, rhs: PolynomialOrInteger<Self>) -> PyResult<Self> {
         match rhs {
             PolynomialOrInteger::Polynomial(p) => {
@@ -6088,6 +6431,11 @@ impl PythonNumberFieldPolynomial {
     }
 
     /// Divide the polynomial `self` by `rhs` if possible, returning the result.
+    ///
+    /// Parameters
+    /// ----------
+    /// rhs: NumberFieldPolynomial
+    ///     The right-hand-side operand.
     pub fn __truediv__(&self, rhs: Self) -> PyResult<Self> {
         if rhs.poly.is_zero() {
             return Err(exceptions::PyValueError::new_err("Division by zero"));
@@ -6147,8 +6495,12 @@ impl PythonNumberFieldPolynomial {
         Ok(self.poly.degree(x) as isize)
     }
 
-    /// Set a new variable ordering for the polynomial.
-    /// This can be used to introduce new variables as well.
+    /// Reorder the polynomial in-place to use the given variable order.
+    ///
+    /// Parameters
+    /// ----------
+    /// order: Sequence[Expression]
+    ///     The variables treated as polynomial variables, in the given order.
     pub fn reorder(&mut self, order: Vec<PythonExpression>) -> PyResult<()> {
         let vars: Vec<PolyVariable> = order
             .into_iter()
@@ -6163,6 +6515,11 @@ impl PythonNumberFieldPolynomial {
     }
 
     /// Divide `self` by `rhs`, returning the quotient and remainder.
+    ///
+    /// Parameters
+    /// ----------
+    /// rhs: NumberFieldPolynomial
+    ///     The right-hand-side operand.
     pub fn quot_rem(
         &self,
         rhs: Self,
@@ -6182,7 +6539,12 @@ impl PythonNumberFieldPolynomial {
         }
     }
 
-    /// Compute the remainder `self % rhs.
+    /// Compute the remainder of the division of `self` by `rhs`.
+    ///
+    /// Parameters
+    /// ----------
+    /// rhs: NumberFieldPolynomial
+    ///     The right-hand-side operand.
     pub fn __mod__(&self, rhs: Self) -> PyResult<Self> {
         if rhs.poly.is_zero() {
             Err(exceptions::PyValueError::new_err("Division by zero"))
@@ -6194,6 +6556,11 @@ impl PythonNumberFieldPolynomial {
     }
 
     /// Compute the greatest common divisor (GCD) of two or more polynomials.
+    ///
+    /// Parameters
+    /// ----------
+    /// rhs: NumberFieldPolynomial
+    ///     The right-hand-side operand.
     #[pyo3(signature = (*rhs))]
     pub fn gcd(
         &self,
@@ -6229,6 +6596,13 @@ impl PythonNumberFieldPolynomial {
     }
 
     /// Compute the resultant of two polynomials with respect to the variable `var`.
+    ///
+    /// Parameters
+    /// ----------
+    /// rhs: NumberFieldPolynomial
+    ///     The right-hand-side operand.
+    /// var: Expression
+    ///     The variable with respect to which the resultant is computed.
     pub fn resultant(&self, rhs: Self, var: PythonExpression) -> PyResult<Self> {
         let x = self
             .poly
@@ -6306,10 +6680,15 @@ impl PythonNumberFieldPolynomial {
     /// Examples
     /// --------
     ///
-    /// >>> from symbolica import Expression
+    /// >>> from symbolica import *
     /// >>> x = S('x')
     /// >>> p = E('x^2+2').to_polynomial()
     /// >>> print(p.derivative(x))
+    ///
+    /// Parameters
+    /// ----------
+    /// x: Expression
+    ///     The variable with respect to which to differentiate.
     pub fn derivative(&self, x: PythonExpression) -> PyResult<Self> {
         let x = self
             .poly
@@ -6396,11 +6775,16 @@ impl PythonNumberFieldPolynomial {
     /// Examples
     /// --------
     ///
-    /// >>> from symbolica import Expression
+    /// >>> from symbolica import *
     /// >>> x = S('x')
     /// >>> p = E('x*y+2*x+x^2').to_polynomial()
     /// >>> for n, pp in p.coefficient_list(x):
     /// >>>     print(n, pp)
+    ///
+    /// Parameters
+    /// ----------
+    /// vars: Expression | Sequence[Expression] | None
+    ///     The variables with respect to which coefficients should be listed.
     #[pyo3(signature = (vars = None))]
     pub fn coefficient_list(
         &self,
@@ -6489,11 +6873,18 @@ impl PythonNumberFieldPolynomial {
     /// Examples
     /// --------
     ///
-    /// >>> from symbolica import Expression
+    /// >>> from symbolica import *
     /// >>> x = S('x')
     /// >>> p = E('x*y+2*x+x^2').to_polynomial()
     /// >>> r = E('y+1').to_polynomial()
     /// >>> p.replace(x, r)
+    ///
+    /// Parameters
+    /// ----------
+    /// x: Expression
+    ///     The variable to replace.
+    /// v: NumberFieldPolynomial | int
+    ///     The polynomial or scalar value that should replace `x`.
     pub fn replace(&self, x: PythonExpression, v: PolynomialOrInteger<Self>) -> PyResult<Self> {
         let id = match x.expr.as_view() {
             AtomView::Var(x) => x.get_symbol(),
@@ -6544,6 +6935,15 @@ impl PythonNumberFieldPolynomial {
     /// otherwise the ordering is lexicographical.
     ///
     /// If `print_stats=True` intermediate statistics will be printed.
+    ///
+    /// Parameters
+    /// ----------
+    /// system: list[NumberFieldPolynomial]
+    ///     The equations or polynomials that define the system.
+    /// grevlex: bool
+    ///     Whether graded reverse lexicographic ordering should be used.
+    /// print_stats: bool
+    ///     Whether Groebner basis statistics should be printed during computation.
     #[pyo3(signature = (system, grevlex = true, print_stats = false))]
     #[classmethod]
     pub fn groebner_basis(
@@ -6572,8 +6972,23 @@ impl PythonNumberFieldPolynomial {
         }
     }
 
-    /// Completely reduce the polynomial w.r.t the polynomials `gs`.
-    /// For example reducing `f=y^2+x` by `g=[x]` yields `y^2`.
+    /// Completely reduce the polynomial w.r.t. the polynomials `system`.
+    ///
+    /// If `grevlex=True`, reverse graded lexicographical ordering is used,
+    /// otherwise the ordering is lexicographical.
+    ///
+    /// Examples
+    /// --------
+    /// >>> E('y^2+x').to_polynomial().reduce([E('x').to_polynomial()])
+    ///
+    /// yields `y^2`
+    ///
+    /// Parameters
+    /// ----------
+    /// system: Sequence[Polynomial]
+    ///     The polynomials that define the reducing set.
+    /// grevlex: bool
+    ///     Whether graded reverse lexicographic ordering should be used.
     #[pyo3(signature = (system, grevlex = true))]
     pub fn reduce(&self, system: Vec<Self>, grevlex: bool) -> Self {
         if grevlex {
@@ -6600,10 +7015,15 @@ impl PythonNumberFieldPolynomial {
     /// Examples
     /// --------
     ///
-    /// >>> from symbolica import Expression
+    /// >>> from symbolica import *
     /// >>> x = S('x')
     /// >>> p = E('x^2+2').to_polynomial()
     /// >>> print(p.integrate(x))
+    ///
+    /// Parameters
+    /// ----------
+    /// x: Expression
+    ///     The variable with respect to which to integrate.
     pub fn integrate(&self, x: PythonExpression) -> PyResult<Self> {
         let x = self
             .poly
@@ -6625,6 +7045,14 @@ impl PythonNumberFieldPolynomial {
     }
 
     /// Convert the polynomial to an expression.
+    ///
+    /// Examples
+    /// --------
+    ///
+    /// >>> from symbolica import *
+    /// >>> e = E('x*y+2*x+x^2')
+    /// >>> p = e.to_polynomial()
+    /// >>> print((e - p.to_expression()).expand())
     pub fn to_expression(&self) -> PyResult<PythonExpression> {
         Ok(self
             .poly
@@ -6818,7 +7246,12 @@ impl PythonRationalPolynomial {
         ))
     }
 
-    /// Add two rational polynomials `self and `rhs`, returning the result.
+    /// Add two rational polynomials `self` and `rhs`, returning the result.
+    ///
+    /// Parameters
+    /// ----------
+    /// rhs: RationalPolynomial
+    ///     The right-hand-side operand.
     pub fn __add__(&self, rhs: Self) -> Self {
         if self.poly.get_variables() == rhs.poly.get_variables() {
             Self {
@@ -6835,6 +7268,11 @@ impl PythonRationalPolynomial {
     }
 
     /// Subtract rational polynomials `rhs` from `self`, returning the result.
+    ///
+    /// Parameters
+    /// ----------
+    /// rhs: RationalPolynomial
+    ///     The right-hand-side operand.
     pub fn __sub__(&self, rhs: Self) -> Self {
         if self.poly.get_variables() == rhs.poly.get_variables() {
             Self {
@@ -6850,7 +7288,12 @@ impl PythonRationalPolynomial {
         }
     }
 
-    /// Multiply two rational polynomials `self and `rhs`, returning the result.
+    /// Multiply two rational polynomials `self` and `rhs`, returning the result.
+    ///
+    /// Parameters
+    /// ----------
+    /// rhs: RationalPolynomial
+    ///     The right-hand-side operand.
     pub fn __mul__(&self, rhs: Self) -> Self {
         if self.poly.get_variables() == rhs.poly.get_variables() {
             Self {
@@ -6867,6 +7310,11 @@ impl PythonRationalPolynomial {
     }
 
     /// Divide the rational polynomial `self` by `rhs` if possible, returning the result.
+    ///
+    /// Parameters
+    /// ----------
+    /// rhs: RationalPolynomial
+    ///     The right-hand-side operand.
     pub fn __truediv__(&self, rhs: Self) -> Self {
         if self.poly.get_variables() == rhs.poly.get_variables() {
             Self {
@@ -6890,6 +7338,11 @@ impl PythonRationalPolynomial {
     }
 
     /// Compute the greatest common divisor (GCD) of two rational polynomials.
+    ///
+    /// Parameters
+    /// ----------
+    /// rhs: RationalPolynomial
+    ///     The right-hand-side operand.
     pub fn gcd(&self, rhs: Self) -> Self {
         if self.poly.get_variables() == rhs.poly.get_variables() {
             Self {
@@ -6910,10 +7363,15 @@ impl PythonRationalPolynomial {
     /// Examples
     /// --------
     ///
-    /// >>> from symbolica import Expression
+    /// >>> from symbolica import *
     /// >>> x = S('x')
     /// >>> p = E('1/((x+y)*(x^2+x*y+1)(x+1))').to_rational_polynomial()
     /// >>> print(p.derivative(x))
+    ///
+    /// Parameters
+    /// ----------
+    /// x: Expression
+    ///     The variable with respect to which to differentiate.
     pub fn derivative(&self, x: PythonExpression) -> PyResult<Self> {
         let x = self
             .poly
@@ -6935,17 +7393,24 @@ impl PythonRationalPolynomial {
         })
     }
 
-    /// Compute the partial fraction decomposition in `x`. If `x` is `None`,
-    /// compute the multivariate partial fraction decomposition.
+    /// Compute the partial fraction decomposition in `x`.
+    ///
+    /// If `None` is passed, the expression will be decomposed in all variables
+    /// which involves a potentially expensive Groebner basis computation.
     ///
     /// Examples
     /// --------
     ///
-    /// >>> from symbolica import Expression
+    /// >>> from symbolica import *
     /// >>> x = S('x')
     /// >>> p = E('1/((x+y)*(x^2+x*y+1)(x+1))').to_rational_polynomial()
     /// >>> for pp in p.apart(x):
     /// >>>     print(pp)
+    ///
+    /// Parameters
+    /// ----------
+    /// x: Expression | None
+    ///     The variable with respect to which to perform the partial-fraction decomposition.
     #[pyo3(signature = (x = None))]
     pub fn apart(&self, x: Option<PythonExpression>) -> PyResult<Vec<Self>> {
         if let Some(x) = x {
@@ -7075,15 +7540,7 @@ impl PythonRationalPolynomial {
         Ok(Self { poly: e })
     }
 
-    /// Convert the rational polynomial to an expression.
-    ///
-    /// Examples
-    /// --------
-    ///
-    /// >>> from symbolica import Expression
-    /// >>> e = E('(x*y+2*x+x^2)/(1+y^2+x^7)')
-    /// >>> p = e.to_rational_polynomial()
-    /// >>> print((e - p.to_expression()).expand())
+    /// Convert the polynomial to an expression.
     pub fn to_expression(&self) -> PyResult<PythonExpression> {
         Ok(self.poly.to_expression().into())
     }
@@ -7246,7 +7703,12 @@ impl PythonFiniteFieldRationalPolynomial {
         ))
     }
 
-    /// Add two rational polynomials `self and `rhs`, returning the result.
+    /// Add two rational polynomials `self` and `rhs`, returning the result.
+    ///
+    /// Parameters
+    /// ----------
+    /// rhs: FiniteFieldRationalPolynomial
+    ///     The right-hand-side operand.
     pub fn __add__(&self, rhs: Self) -> Self {
         if self.poly.get_variables() == rhs.poly.get_variables() {
             Self {
@@ -7263,6 +7725,11 @@ impl PythonFiniteFieldRationalPolynomial {
     }
 
     /// Subtract rational polynomials `rhs` from `self`, returning the result.
+    ///
+    /// Parameters
+    /// ----------
+    /// rhs: FiniteFieldRationalPolynomial
+    ///     The right-hand-side operand.
     pub fn __sub__(&self, rhs: Self) -> Self {
         if self.poly.get_variables() == rhs.poly.get_variables() {
             Self {
@@ -7278,7 +7745,12 @@ impl PythonFiniteFieldRationalPolynomial {
         }
     }
 
-    /// Multiply two rational polynomials `self and `rhs`, returning the result.
+    /// Multiply two rational polynomials `self` and `rhs`, returning the result.
+    ///
+    /// Parameters
+    /// ----------
+    /// rhs: FiniteFieldRationalPolynomial
+    ///     The right-hand-side operand.
     pub fn __mul__(&self, rhs: Self) -> Self {
         if self.poly.get_variables() == rhs.poly.get_variables() {
             Self {
@@ -7295,6 +7767,11 @@ impl PythonFiniteFieldRationalPolynomial {
     }
 
     /// Divide the rational polynomial `self` by `rhs` if possible, returning the result.
+    ///
+    /// Parameters
+    /// ----------
+    /// rhs: FiniteFieldRationalPolynomial
+    ///     The right-hand-side operand.
     pub fn __truediv__(&self, rhs: Self) -> Self {
         if self.poly.get_variables() == rhs.poly.get_variables() {
             Self {
@@ -7318,6 +7795,11 @@ impl PythonFiniteFieldRationalPolynomial {
     }
 
     /// Compute the greatest common divisor (GCD) of two rational polynomials.
+    ///
+    /// Parameters
+    /// ----------
+    /// rhs: FiniteFieldRationalPolynomial
+    ///     The right-hand-side operand.
     pub fn gcd(&self, rhs: Self) -> Self {
         if self.poly.get_variables() == rhs.poly.get_variables() {
             Self {
@@ -7343,10 +7825,15 @@ impl PythonFiniteFieldRationalPolynomial {
     /// Examples
     /// --------
     ///
-    /// >>> from symbolica import Expression
+    /// >>> from symbolica import *
     /// >>> x = S('x')
     /// >>> p = E('1/((x+y)*(x^2+x*y+1)(x+1))').to_rational_polynomial()
     /// >>> print(p.derivative(x))
+    ///
+    /// Parameters
+    /// ----------
+    /// x: Expression
+    ///     The variable with respect to which to differentiate.
     pub fn derivative(&self, x: PythonExpression) -> PyResult<Self> {
         let x = self
             .poly
@@ -7370,14 +7857,22 @@ impl PythonFiniteFieldRationalPolynomial {
 
     /// Compute the partial fraction decomposition in `x`.
     ///
+    /// If `None` is passed, the expression will be decomposed in all variables
+    /// which involves a potentially expensive Groebner basis computation.
+    ///
     /// Examples
     /// --------
     ///
-    /// >>> from symbolica import Expression
+    /// >>> from symbolica import *
     /// >>> x = S('x')
     /// >>> p = E('1/((x+y)*(x^2+x*y+1)(x+1))').to_rational_polynomial()
     /// >>> for pp in p.apart(x):
     /// >>>     print(pp)
+    ///
+    /// Parameters
+    /// ----------
+    /// x: Expression | None
+    ///     The variable with respect to which to perform the partial-fraction decomposition.
     pub fn apart(&self, x: PythonExpression) -> PyResult<Vec<Self>> {
         let id = match x.expr.as_view() {
             AtomView::Var(x) => x.get_symbol(),
@@ -7414,10 +7909,20 @@ impl PythonFiniteFieldRationalPolynomial {
     ///
     /// If this requirements is too strict, use `Expression.to_polynomial()` instead.
     ///
-    ///
     /// Examples
     /// --------
-    /// >>> e = Polynomial.parse('3/4*x^2+y+y*4', ['x', 'y'])
+    /// >>> e = FiniteFieldRationalPolynomial.parse('3*x^2+y+y*4', ['x', 'y'], 17)
+    ///
+    /// Parameters
+    /// ----------
+    /// arg: str
+    ///     The input value.
+    /// vars: Sequence[str]
+    ///     The variables treated as polynomial variables, in the given order.
+    /// prime: int
+    ///     The prime modulus of the finite field.
+    /// default_namespace: str | None
+    ///     The namespace assumed for unqualified symbols during parsing.
     ///
     /// Raises
     /// ------

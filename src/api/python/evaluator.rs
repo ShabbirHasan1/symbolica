@@ -187,8 +187,12 @@ impl PythonExpressionEvaluator {
         }
     }
 
-    /// Import an exported evaluator from another thread or machine.
-    /// Use `save` to export the evaluator.
+    /// Load the evaluator into memory, preparing it for evaluation.
+    ///
+    /// Parameters
+    /// ----------
+    /// evaluator: bytes
+    ///     The serialized evaluator state.
     #[classmethod]
     fn load(_cls: &Bound<'_, PyType>, evaluator: Bound<'_, PyBytes>) -> PyResult<Self> {
         type SavedEvaluator = (
@@ -455,7 +459,7 @@ impl PythonExpressionEvaluator {
     /// Merge evaluator `other` into `self`. The parameters must be the same, and
     /// the outputs will be concatenated.
     ///
-    /// The optional `cpe_rounds` parameter can be used to limit the number of common
+    /// The optional `cpe_iterations` parameter can be used to limit the number of common
     /// pair elimination rounds after the merge.
     ///
     /// Examples
@@ -468,6 +472,13 @@ impl PythonExpressionEvaluator {
     /// >>> e1.evaluate([[2.]])
     ///
     /// yields `[2, 3]`.
+    ///
+    /// Parameters
+    /// ----------
+    /// other: Evaluator
+    ///     The evaluator to merge into this one.
+    /// cpe_iterations: int | None
+    ///     The number of common subexpression elimination iterations to perform.
     #[pyo3(signature = (other, cpe_iterations = None))]
     fn merge(
         &mut self,
@@ -504,7 +515,7 @@ impl PythonExpressionEvaluator {
     /// Evaluate the expression for multiple inputs and return the result.
     /// For best performance, use `numpy` arrays instead of lists.
     ///
-    /// On the first call, the expression is compiled to a JIT evaluator for improved performance.
+    /// On the first call, the expression is JIT compiled using SymJIT.
     ///
     /// Examples
     /// --------
@@ -515,7 +526,12 @@ impl PythonExpressionEvaluator {
     /// >>> ev = E('x * y + 2').evaluator([S('x'), S('y')])
     /// >>> print(ev.evaluate(np.array([1., 2., 3., 4., 5., 6.]).reshape((3, 2))))
     ///
-    /// Yields`[[ 4.] [ 8.] [14.]]`
+    /// Yields `[[ 4.] [ 8.] [14.]]`
+    ///
+    /// Parameters
+    /// ----------
+    /// inputs: npt.ArrayLike
+    ///     The input values or batches to evaluate.
     #[gen_stub(override_return_type(
         type_repr = "numpy.typing.NDArray[numpy.float64]",
         imports = ("numpy.typing", "numpy")
@@ -621,6 +637,13 @@ impl PythonExpressionEvaluator {
     /// >>> print(ev.evaluate_with_prec([Decimal('1.234567890121223456789981273238947212312338947923')], 50))
     ///
     /// Yields `1.524157875318369274550121833760353508310334033629`
+    ///
+    /// Parameters
+    /// ----------
+    /// inputs: Sequence[float | str | Decimal]
+    ///     The input values or batches to evaluate.
+    /// decimal_digit_precision: int
+    ///     The decimal precision used for arbitrary-precision evaluation.
     #[gen_stub(override_return_type(type_repr = "list[decimal.Decimal]", imports = ("decimal")))]
     fn evaluate_with_prec<'py>(
         &mut self,
@@ -661,7 +684,7 @@ impl PythonExpressionEvaluator {
     /// For best performance, use `numpy` arrays and `np.complex128` instead of lists and
     /// `complex`.
     ///
-    /// On the first call, the expression is compiled to a JIT evaluator for improved performance.
+    /// On the first call, the expression is JIT compiled using SymJIT.
     ///
     /// Examples
     /// --------
@@ -672,7 +695,12 @@ impl PythonExpressionEvaluator {
     /// >>> ev = E('x * y + 2').evaluator([S('x'), S('y')])
     /// >>> print(ev.evaluate(np.array([1.+2j, 2., 3., 4., 5., 6.]).reshape((3, 2))))
     ///
-    /// Yields`[[ 4.+4.j] [14.+0.j] [32.+0.j]]`
+    /// Yields `[[ 4.+4.j] [14.+0.j] [32.+0.j]]`
+    ///
+    /// Parameters
+    /// ----------
+    /// inputs: npt.ArrayLike
+    ///     The input values or batches to evaluate.
     #[gen_stub(override_return_type(
         type_repr = "numpy.typing.NDArray[numpy.complex128]",
         imports = ("numpy.typing", "numpy")
@@ -773,7 +801,7 @@ impl PythonExpressionEvaluator {
     }
 
     /// Evaluate the expression for a single complex input, represented as a tuple of real and imaginary parts.
-    /// The precision of the input parameter is honored, and all constants are converted to a float with a decimal precision set by `decimal_digit_precision`.
+    /// The precision of the input parameters is honored, and all constants are converted to a float with a decimal precision set by `decimal_digit_precision`.
     ///
     /// If `decimal_digit_precision` is set to 32, a much faster evaluation using double-float arithmetic is performed.
     ///
@@ -787,6 +815,13 @@ impl PythonExpressionEvaluator {
     /// >>>     [(Decimal('1.234567890121223456789981273238947212312338947923'), Decimal('3.434567890121223356789981273238947212312338947923'))], 50))
     ///
     /// Yields `[(Decimal('-10.27209871653338252296233957800668637617803672307'), Decimal('8.480414467170121512062583245527383392798704790330'))]`
+    ///
+    /// Parameters
+    /// ----------
+    /// inputs: Sequence[tuple[float | str | Decimal, float | str | Decimal]]
+    ///     The input values or batches to evaluate.
+    /// decimal_digit_precision: int
+    ///     The decimal precision used for arbitrary-precision evaluation.
     #[gen_stub(override_return_type(type_repr = "list[tuple[decimal.Decimal, decimal.Decimal]]", imports = ("decimal")))]
     fn evaluate_complex_with_prec<'py>(
         &mut self,
@@ -902,7 +937,22 @@ impl PythonExpressionEvaluator {
     /// operations with real arguments are expected to yield real results.
     ///
     /// Must be called after all optimization functions and merging are performed
-    /// on the evaluator and before the first call to `evaluate`, or the registration will be lost.
+    /// on the evaluator, or the registration will be lost.
+    ///
+    /// Parameters
+    /// ----------
+    /// real_params: list[int]
+    ///     The parameter indices that should be treated as real.
+    /// sqrt_real: bool
+    ///     Whether square roots should be assumed real.
+    /// log_real: bool
+    ///     Whether logarithms should be assumed real.
+    /// powf_real: bool
+    ///     Whether fractional powers should be assumed real.
+    /// real_if_args_real: bool
+    ///     Whether custom evaluators should yield real results for real arguments.
+    /// verbose: bool
+    ///     Whether verbose output should be enabled.
     #[pyo3(signature = (real_params, sqrt_real = false, log_real = false, powf_real = false, real_if_args_real = false, verbose = false))]
     fn set_real_params(
         &mut self,
@@ -924,6 +974,39 @@ impl PythonExpressionEvaluator {
     }
 
     /// Compile the evaluator to a shared library using C++ and optionally inline assembly and load it.
+    ///
+    /// You may have to specify `-code=sm_XY` for your architecture `XY` in the compiler flags to prevent a potentially long
+    /// JIT compilation upon the first evaluation.
+    ///
+    /// Parameters
+    /// ----------
+    /// function_name : str
+    ///     The name of the function to generate and compile.
+    /// filename : str
+    ///     The name of the file to generate.
+    /// library_name : str
+    ///     The name of the shared library to generate.
+    /// number_type :  Literal['real'] | Literal['complex'] | Literal['real_4x'] | Literal['complex_4x'] | Literal['cuda_real'] | Literal['cuda_complex']
+    ///     The numeric backend to generate. Use 'real' for double precision or 'complex' for complex double.
+    ///     For 4x SIMD runs, use 'real_4x' or 'complex_4x'.
+    ///     For GPU runs with CUDA, use 'cuda_real' or 'cuda_complex'.
+    /// inline_asm : str
+    ///     The inline ASM option can be set to 'default', 'x64', 'avx2', 'aarch64' or 'none'.
+    /// optimization_level : int
+    ///     The compiler optimization level. This can be set to 0, 1, 2 or 3.
+    /// native: bool
+    ///     If `True`, compile for the native architecture. This may produce faster code, but is less portable.
+    /// compiler_path : str | None
+    ///     The custom path to the compiler executable.
+    /// compiler_flags : Sequence[str] | None
+    ///     The custom flags to pass to the compiler.
+    /// custom_header : str | None
+    ///     The custom header to include in the generated code.
+    /// cuda_number_of_evaluations: int | None
+    ///     The number of parallel evaluations to perform on the CUDA device. The input to evaluate must
+    ///     have the length `cuda_number_of_evaluations * arg_len`.
+    /// cuda_block_size: int | None
+    ///     The block size for CUDA kernel launches.
     #[gen_stub(skip)]
     #[pyo3(signature =
         (function_name,
@@ -1175,6 +1258,8 @@ static ONE: fn() -> String = || "1".into();
 #[cfg(feature = "python_stubgen")]
 static THREE: fn() -> String = || "3".into();
 #[cfg(feature = "python_stubgen")]
+static TRUE_ARG: fn() -> String = || "True".into();
+#[cfg(feature = "python_stubgen")]
 static CUDA_BLOCK_DEFAULT: fn() -> String = || "256".into();
 #[cfg(feature = "python_stubgen")]
 static DEFAULT: fn() -> String = || "\"default\"".into();
@@ -1230,6 +1315,12 @@ PyMethodsInfo {
                     type_info: || Option::<u8>::type_input(),
                 },
                 ParameterInfo {
+                    name: "native",
+                    kind: ParameterKind::PositionalOrKeyword,
+                    default: ParameterDefault::Expr(TRUE_ARG),
+                    type_info: || bool::type_input(),
+                },
+                ParameterInfo {
                     name: "compiler_path",
                     kind: ParameterKind::PositionalOrKeyword,
                     default: ParameterDefault::Expr(NONE_ARG),
@@ -1253,7 +1344,7 @@ PyMethodsInfo {
             r#type: MethodType::Class,
             r#return: || PythonCompiledRealExpressionEvaluator::type_output(),
             doc:
-r#"Compile the evaluator to a shared library using C++ and optionally inline assembly and load it.
+            r#"Compile the evaluator to a shared library using C++ and optionally inline assembly and load it.
 
 Parameters
 ----------
@@ -1264,18 +1355,20 @@ filename : str
 library_name : str
     The name of the shared library to generate.
 number_type : Literal['real'] | Literal['complex'] | Literal['real_4x'] | Literal['complex_4x'] | Literal['cuda_real'] | Literal['cuda_complex']
-    The type of numbers to use. Can be 'real' for double or 'complex' for complex double.
+    The numeric backend to generate. Use 'real' for double precision or 'complex' for complex double.
     For 4x SIMD runs, use 'real_4x' or 'complex_4x'.
     For GPU runs with CUDA, use 'cuda_real' or 'cuda_complex'.
 inline_asm : str
-    The inline ASM option can be set to 'default', 'x64', 'aarch64' or 'none'.
+    The inline ASM option can be set to 'default', 'x64', 'avx2', 'aarch64' or 'none'.
 optimization_level : int
-    The optimization level to use for the compiler. This can be set to 0, 1, 2 or 3.
-compiler_path : Optional[str]
+    The compiler optimization level. This can be set to 0, 1, 2 or 3.
+native: bool
+    If `True`, compile for the native architecture. This may produce faster code, but is less portable.
+compiler_path : str | None
     The custom path to the compiler executable.
-compiler_flags : Optional[Sequence[str]]
+compiler_flags : Sequence[str] | None
     The custom flags to pass to the compiler.
-custom_header : Optional[str]
+custom_header : str | None
     The custom header to include in the generated code."#,
             is_async: false,
             deprecated: None,
@@ -1321,6 +1414,12 @@ custom_header : Optional[str]
                     type_info: || Option::<u8>::type_input(),
                 },
                 ParameterInfo {
+                    name: "native",
+                    kind: ParameterKind::PositionalOrKeyword,
+                    default: ParameterDefault::Expr(TRUE_ARG),
+                    type_info: || bool::type_input(),
+                },
+                ParameterInfo {
                     name: "compiler_path",
                     kind: ParameterKind::PositionalOrKeyword,
                     default: ParameterDefault::Expr(NONE_ARG),
@@ -1343,7 +1442,7 @@ custom_header : Optional[str]
             r#type: MethodType::Class,
             r#return: || PythonCompiledComplexExpressionEvaluator::type_output(),
             doc:
-r#"Compile the evaluator to a shared library using C++ and optionally inline assembly and load it.
+            r#"Compile the evaluator to a shared library using C++ and optionally inline assembly and load it.
 
 Parameters
 ----------
@@ -1354,18 +1453,20 @@ filename : str
 library_name : str
     The name of the shared library to generate.
 number_type : Literal['real'] | Literal['complex'] | Literal['real_4x'] | Literal['complex_4x'] | Literal['cuda_real'] | Literal['cuda_complex']
-    The type of numbers to use. Can be 'real' for double or 'complex' for complex double.
+    The numeric backend to generate. Use 'real' for double precision or 'complex' for complex double.
     For 4x SIMD runs, use 'real_4x' or 'complex_4x'.
     For GPU runs with CUDA, use 'cuda_real' or 'cuda_complex'.
 inline_asm : str
-    The inline ASM option can be set to 'default', 'x64', 'aarch64' or 'none'.
+    The inline ASM option can be set to 'default', 'x64', 'avx2', 'aarch64' or 'none'.
 optimization_level : int
-    The optimization level to use for the compiler. This can be set to 0, 1, 2 or 3.
-compiler_path : Optional[str]
+    The compiler optimization level. This can be set to 0, 1, 2 or 3.
+native: bool
+    If `True`, compile for the native architecture. This may produce faster code, but is less portable.
+compiler_path : str | None
     The custom path to the compiler executable.
-compiler_flags : Optional[Sequence[str]]
+compiler_flags : Sequence[str] | None
     The custom flags to pass to the compiler.
-custom_header : Optional[str]
+custom_header : str | None
     The custom header to include in the generated code."#,
             is_async: false,
             deprecated: None,
@@ -1412,6 +1513,12 @@ custom_header : Optional[str]
                     type_info: || Option::<u8>::type_input(),
                 },
                 ParameterInfo {
+                    name: "native",
+                    kind: ParameterKind::PositionalOrKeyword,
+                    default: ParameterDefault::Expr(TRUE_ARG),
+                    type_info: || bool::type_input(),
+                },
+                ParameterInfo {
                     name: "compiler_path",
                     kind: ParameterKind::PositionalOrKeyword,
                     default: ParameterDefault::Expr(NONE_ARG),
@@ -1434,7 +1541,7 @@ custom_header : Optional[str]
             r#type: MethodType::Class,
             r#return: || PythonCompiledSimdRealExpressionEvaluator::type_output(),
             doc:
-r#"Compile the evaluator to a shared library using C++ and optionally inline assembly and load it.
+            r#"Compile the evaluator to a shared library with 4x SIMD using C++ and optionally inline assembly and load it.
 
 Parameters
 ----------
@@ -1445,18 +1552,20 @@ filename : str
 library_name : str
     The name of the shared library to generate.
 number_type : Literal['real'] | Literal['complex'] | Literal['real_4x'] | Literal['complex_4x'] | Literal['cuda_real'] | Literal['cuda_complex']
-    The type of numbers to use. Can be 'real' for double or 'complex' for complex double.
+    The numeric backend to generate. Use 'real' for double precision or 'complex' for complex double.
     For 4x SIMD runs, use 'real_4x' or 'complex_4x'.
     For GPU runs with CUDA, use 'cuda_real' or 'cuda_complex'.
 inline_asm : str
-    The inline ASM option can be set to 'default', 'x64', 'aarch64' or 'none'.
+    The inline ASM option can be set to 'default', 'x64', 'avx2', 'aarch64' or 'none'.
 optimization_level : int
-    The optimization level to use for the compiler. This can be set to 0, 1, 2 or 3.
-compiler_path : Optional[str]
+    The compiler optimization level. This can be set to 0, 1, 2 or 3.
+native: bool
+    If `True`, compile for the native architecture. This may produce faster code, but is less portable.
+compiler_path : str | None
     The custom path to the compiler executable.
-compiler_flags : Optional[Sequence[str]]
+compiler_flags : Sequence[str] | None
     The custom flags to pass to the compiler.
-custom_header : Optional[str]
+custom_header : str | None
     The custom header to include in the generated code."#,
             is_async: false,
             deprecated: None,
@@ -1503,6 +1612,12 @@ custom_header : Optional[str]
                     type_info: || Option::<u8>::type_input(),
                 },
                 ParameterInfo {
+                    name: "native",
+                    kind: ParameterKind::PositionalOrKeyword,
+                    default: ParameterDefault::Expr(TRUE_ARG),
+                    type_info: || bool::type_input(),
+                },
+                ParameterInfo {
                     name: "compiler_path",
                     kind: ParameterKind::PositionalOrKeyword,
                     default: ParameterDefault::Expr(NONE_ARG),
@@ -1525,7 +1640,7 @@ custom_header : Optional[str]
             r#type: MethodType::Class,
             r#return: || PythonCompiledSimdComplexExpressionEvaluator::type_output(),
             doc:
-r#"Compile the evaluator to a shared library using C++ and optionally inline assembly and load it.
+            r#"Compile the evaluator to a shared library with 4x SIMD using C++ and optionally inline assembly and load it.
 
 Parameters
 ----------
@@ -1536,18 +1651,20 @@ filename : str
 library_name : str
     The name of the shared library to generate.
 number_type : Literal['real'] | Literal['complex'] | Literal['real_4x'] | Literal['complex_4x'] | Literal['cuda_real'] | Literal['cuda_complex']
-    The type of numbers to use. Can be 'real' for double or 'complex' for complex double.
+    The numeric backend to generate. Use 'real' for double precision or 'complex' for complex double.
     For 4x SIMD runs, use 'real_4x' or 'complex_4x'.
     For GPU runs with CUDA, use 'cuda_real' or 'cuda_complex'.
 inline_asm : str
-    The inline ASM option can be set to 'default', 'x64', 'aarch64' or 'none'.
+    The inline ASM option can be set to 'default', 'x64', 'avx2', 'aarch64' or 'none'.
 optimization_level : int
-    The optimization level to use for the compiler. This can be set to 0, 1, 2 or 3.
-compiler_path : Optional[str]
+    The compiler optimization level. This can be set to 0, 1, 2 or 3.
+native: bool
+    If `True`, compile for the native architecture. This may produce faster code, but is less portable.
+compiler_path : str | None
     The custom path to the compiler executable.
-compiler_flags : Optional[Sequence[str]]
+compiler_flags : Sequence[str] | None
     The custom flags to pass to the compiler.
-custom_header : Optional[str]
+custom_header : str | None
     The custom header to include in the generated code."#,
             is_async: false,
             deprecated: None,
@@ -1594,6 +1711,12 @@ custom_header : Optional[str]
                     type_info: || Option::<u8>::type_input(),
                 },
                 ParameterInfo {
+                    name: "native",
+                    kind: ParameterKind::PositionalOrKeyword,
+                    default: ParameterDefault::Expr(TRUE_ARG),
+                    type_info: || bool::type_input(),
+                },
+                ParameterInfo {
                     name: "compiler_path",
                     kind: ParameterKind::PositionalOrKeyword,
                     default: ParameterDefault::Expr(NONE_ARG),
@@ -1627,7 +1750,7 @@ custom_header : Optional[str]
             r#type: MethodType::Class,
             r#return: || PythonCompiledCudaRealExpressionEvaluator::type_output(),
             doc:
-r#"Compile the evaluator to a shared library using C++ and optionally inline assembly and load it.
+            r#"Compile the evaluator to a shared library using C++ and optionally inline assembly and load it.
 
 You may have to specify `-code=sm_XY` for your architecture `XY` in the compiler flags to prevent a potentially long
 JIT compilation upon the first evaluation.
@@ -1641,24 +1764,26 @@ filename : str
 library_name : str
     The name of the shared library to generate.
 number_type : Literal['real'] | Literal['complex'] | Literal['real_4x'] | Literal['complex_4x'] | Literal['cuda_real'] | Literal['cuda_complex']
-    The type of numbers to use. Can be 'real' for double or 'complex' for complex double.
+    The numeric backend to generate. Use 'real' for double precision or 'complex' for complex double.
     For 4x SIMD runs, use 'real_4x' or 'complex_4x'.
     For GPU runs with CUDA, use 'cuda_real' or 'cuda_complex'.
 inline_asm : str
-    The inline ASM option can be set to 'default', 'x64', 'aarch64' or 'none'.
+    The inline ASM option can be set to 'default', 'x64', 'avx2', 'aarch64' or 'none'.
 optimization_level : int
-    The optimization level to use for the compiler. This can be set to 0, 1, 2 or 3.
-compiler_path : Optional[str]
+    The compiler optimization level. This can be set to 0, 1, 2 or 3.
+native: bool
+    If `True`, compile for the native architecture. This may produce faster code, but is less portable.
+compiler_path : str | None
     The custom path to the compiler executable.
-compiler_flags : Optional[Sequence[str]]
+compiler_flags : Sequence[str] | None
     The custom flags to pass to the compiler.
-custom_header : Optional[str]
+custom_header : str | None
     The custom header to include in the generated code.
-cuda_number_of_evaluations: Optional[int]
+cuda_number_of_evaluations: int | None
     The number of parallel evaluations to perform on the CUDA device. The input to evaluate must
     have the length `cuda_number_of_evaluations * arg_len`.
-cuda_block_size: Optional[int]
-    The block size to use for CUDA kernel launches."#,
+cuda_block_size: int | None
+    The block size for CUDA kernel launches."#,
             is_async: false,
             deprecated: None,
             type_ignored: None,
@@ -1704,6 +1829,12 @@ cuda_block_size: Optional[int]
                     type_info: || Option::<u8>::type_input(),
                 },
                 ParameterInfo {
+                    name: "native",
+                    kind: ParameterKind::PositionalOrKeyword,
+                    default: ParameterDefault::Expr(TRUE_ARG),
+                    type_info: || bool::type_input(),
+                },
+                ParameterInfo {
                     name: "compiler_path",
                     kind: ParameterKind::PositionalOrKeyword,
                     default: ParameterDefault::Expr(NONE_ARG),
@@ -1737,7 +1868,7 @@ cuda_block_size: Optional[int]
             r#type: MethodType::Class,
             r#return: || PythonCompiledCudaComplexExpressionEvaluator::type_output(),
             doc:
-r#"Compile the evaluator to a shared library using C++ and optionally inline assembly and load it.
+            r#"Compile the evaluator to a shared library using C++ and optionally inline assembly and load it.
 
 You may have to specify `-code=sm_XY` for your architecture `XY` in the compiler flags to prevent a potentially long
 JIT compilation upon the first evaluation.
@@ -1750,25 +1881,27 @@ filename : str
     The name of the file to generate.
 library_name : str
     The name of the shared library to generate.
-number_type : Literal['real'] | Literal['complex'] | Literal['real_4x'] | Literal['complex_4x'] | Literal['cuda_real'] | Literal['cuda_complex']
-    The type of numbers to use. Can be 'real' for double or 'complex' for complex double.
+number_type :  Literal['real'] | Literal['complex'] | Literal['real_4x'] | Literal['complex_4x'] | Literal['cuda_real'] | Literal['cuda_complex']
+    The numeric backend to generate. Use 'real' for double precision or 'complex' for complex double.
     For 4x SIMD runs, use 'real_4x' or 'complex_4x'.
     For GPU runs with CUDA, use 'cuda_real' or 'cuda_complex'.
 inline_asm : str
-    The inline ASM option can be set to 'default', 'x64', 'aarch64' or 'none'.
+    The inline ASM option can be set to 'default', 'x64', 'avx2', 'aarch64' or 'none'.
 optimization_level : int
-    The optimization level to use for the compiler. This can be set to 0, 1, 2 or 3.
-compiler_path : Optional[str]
+    The compiler optimization level. This can be set to 0, 1, 2 or 3.
+native: bool
+    If `True`, compile for the native architecture. This may produce faster code, but is less portable.
+compiler_path : str | None
     The custom path to the compiler executable.
-compiler_flags : Optional[Sequence[str]]
+compiler_flags : Sequence[str] | None
     The custom flags to pass to the compiler.
-custom_header : Optional[str]
+custom_header : str | None
     The custom header to include in the generated code.
-cuda_number_of_evaluations: Optional[int]
+cuda_number_of_evaluations: int | None
     The number of parallel evaluations to perform on the CUDA device. The input to evaluate must
     have the length `cuda_number_of_evaluations * arg_len`.
-cuda_block_size: Optional[int]
-    The block size to use for CUDA kernel launches."#,
+cuda_block_size: int | None
+    The block size for CUDA kernel launches."#,
             is_async: false,
             deprecated: None,
             type_ignored: None,

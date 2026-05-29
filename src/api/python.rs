@@ -539,6 +539,11 @@ impl<'a, 'py> IntoPyObject<'py> for PythonBorrowedPrintUserData<'a> {
 /// All subsequently created symbols in the calling module will be defined within this namespace.
 ///
 /// This function sets the `SYMBOLICA_NAMESPACE` variable in the global scope of the calling module.
+///
+/// Parameters
+/// ----------
+/// namespace: str
+///     The namespace to set for subsequently created symbols.
 #[cfg_attr(
     feature = "python_stubgen",
     gen_stub_pyfunction(module = "symbolica.core")
@@ -653,6 +658,11 @@ fn is_licensed() -> bool {
 
 /// Set the Symbolica license key for this computer. Can only be called before calling any other Symbolica functions
 /// and before importing any community modules.
+///
+/// Parameters
+/// ----------
+/// key: str
+///     The license key to register for this machine.
 #[cfg_attr(
     feature = "python_stubgen",
     gen_stub_pyfunction(module = "symbolica.core")
@@ -662,8 +672,14 @@ fn set_license_key(key: String) -> PyResult<()> {
     LicenseManager::set_license_key(&key).map_err(exceptions::PyException::new_err)
 }
 
-/// Request a key for **non-professional** use for the user `name`, that will be sent to the e-mail address
-/// `email`.
+/// Request a key for **non-professional** use for the user `name`, that will be sent to the e-mail address `email`.
+///
+/// Parameters
+/// ----------
+/// name: str
+///     The name of the user.
+/// email: str
+///     The email address that should receive the license.
 #[cfg_attr(
     feature = "python_stubgen",
     gen_stub_pyfunction(module = "symbolica.core")
@@ -675,8 +691,16 @@ fn request_hobbyist_license(name: String, email: String) -> PyResult<()> {
         .map_err(exceptions::PyConnectionError::new_err)
 }
 
-/// Request a key for a trial license for the user `name` working at `company`, that will be sent to the e-mail address
-/// `email`.
+/// Request a key for a trial license for the user `name` working at `company`, that will be sent to the e-mail address `email`.
+///
+/// Parameters
+/// ----------
+/// name: str
+///     The name of the user.
+/// email: str
+///     The email address that should receive the license.
+/// company: str
+///     The company of the user.
 #[cfg_attr(
     feature = "python_stubgen",
     gen_stub_pyfunction(module = "symbolica.core")
@@ -690,6 +714,17 @@ fn request_trial_license(name: String, email: String, company: String) -> PyResu
 
 /// Request a sublicense key for the user `name` working at `company` that has the site-wide license `super_license`.
 /// The key will be sent to the e-mail address `email`.
+///
+/// Parameters
+/// ----------
+/// name: str
+///     The name of the sublicense user.
+/// email: str
+///     The email address that should receive the sublicense.
+/// company: str
+///     The company of the sublicense user.
+/// super_license: str
+///     The parent site-wide license key.
 #[cfg_attr(
     feature = "python_stubgen",
     gen_stub_pyfunction(module = "symbolica.core")
@@ -707,6 +742,11 @@ fn request_sublicense(
 }
 
 /// Get the license key for the account registered with the provided email address.
+///
+/// Parameters
+/// ----------
+/// email: str
+///     The email address of the licensed account.
 #[cfg_attr(
     feature = "python_stubgen",
     gen_stub_pyfunction(module = "symbolica.core")
@@ -719,7 +759,139 @@ fn get_license_key(email: String) -> PyResult<()> {
 }
 
 #[pyfunction(name = "S", signature = (*names,is_symmetric=None,is_antisymmetric=None,is_cyclesymmetric=None,is_linear=None,is_scalar=None,is_real=None,is_integer=None,is_positive=None,tags=None,aliases=None,normalization=None,print=None,derivative=None,series=None,eval=None,data=None))]
-/// Shorthand notation for :func:`Expression.symbol`.
+/// Create new symbols from `names`. Symbols can have attributes,
+/// such as symmetries. If no attributes
+/// are specified and the symbol was previously defined, the attributes are inherited.
+/// Once attributes are defined on a symbol, they cannot be redefined later.
+///
+/// Examples
+/// --------
+/// Define a regular symbol and use it as a variable:
+/// >>> x = S('x')
+/// >>> e = x**2 + 5
+/// >>> print(e)  # x**2 + 5
+///
+/// Define a regular symbol and use it as a function:
+/// >>> f = S('f')
+/// >>> e = f(1,2)
+/// >>> print(e)  # f(1,2)
+///
+///
+/// Define a symmetric function:
+/// >>> f = S('f', is_symmetric=True)
+/// >>> e = f(2,1)
+/// >>> print(e)  # f(1,2)
+///
+///
+/// Define a linear and symmetric function:
+/// >>> p1, p2, p3, p4 = S('p1', 'p2', 'p3', 'p4')
+/// >>> dot = S('dot', is_symmetric=True, is_linear=True)
+/// >>> e = dot(p2+2*p3,p1+3*p2-p3)
+/// dot(p1,p2)+2*dot(p1,p3)+3*dot(p2,p2)-dot(p2,p3)+6*dot(p2,p3)-2*dot(p3,p3)
+///
+/// Define a custom normalization function:
+/// >>> e = S('real_log', normalization=T().replace(E("x_(exp(x1_))"), E("x1_")))
+/// >>> E("real_log(exp(x)) + real_log(5)")
+///
+/// Define a custom print function:
+/// >>> def print_mu(mu: Expression, mode: PrintMode, **kwargs) -> str | None:
+/// >>>     if mode == PrintMode.Latex:
+/// >>>         if mu.get_type() == AtomType.Fn:
+/// >>>             return "\\mu_{" + ",".join(a.format() for a in mu) + "}"
+/// >>>         else:
+/// >>>             return "\\mu"
+/// >>> mu = S("mu", print=print_mu)
+/// >>> expr = E("mu + mu(1,2)")
+/// >>> print(expr.to_latex())
+///
+/// If the function returns `None`, the default print function is used.
+///
+/// Define a custom derivative function:
+/// >>> tag = S('tag', derivative=lambda f, index: f)
+/// >>> x = S('x')
+/// >>> tag(3, x).derivative(x)
+///
+/// Define a custom series function that returns the principal part and the regular part,
+/// or `None` if a standard construction through the derivative can be used:
+/// >>> def inv_series(args: Sequence[Series]) -> tuple[Expression, Expression] | None:
+/// >>>     return (N(0), args[0].pow(-1).to_expression())
+/// >>>
+/// >>> t = S('t')
+/// >>> inv = S('inv', series=inv_series)
+///
+/// Define a function with a custom evaluation:
+/// >>> cosh = S(
+/// >>>     "my_cosh",
+/// >>>     eval={
+/// >>>         "float": lambda args: math.cosh(args[0]),
+/// >>>         "complex": lambda args: cmath.cosh(args[0]),
+/// >>>         "cpp": "template<typename T> T python_my_cosh(T a) { return std::cosh(a); }",
+/// >>>     },
+/// >>> )
+///
+/// Add custom data to a symbol:
+/// >>> x = S('x', data={'my_tag': 'my_value'})
+/// >>> r = x.get_symbol_data('my_tag')
+///
+/// Parameters
+/// ----------
+/// *names : str
+///     The name of the symbol
+/// is_symmetric : bool | None
+///     Set to true if the symbol is symmetric.
+/// is_antisymmetric : bool | None
+///     Set to true if the symbol is antisymmetric.
+/// is_cyclesymmetric : bool | None
+///     Set to true if the symbol is cyclesymmetric.
+/// is_linear : bool | None
+///     Set to true if the symbol is linear.
+/// is_scalar : bool | None
+///     Set to true if the symbol is a scalar. It will be moved out of linear functions.
+/// is_real : bool | None
+///     Set to true if the symbol is a real number.
+/// is_integer : bool | None
+///     Set to true if the symbol is an integer.
+/// is_positive : bool | None
+///     Set to true if the symbol is a positive number.
+/// tags: Sequence[str] | None = None
+///     A list of tags to associate with the symbol.
+/// aliases: Sequence[str] | None = None
+///     A list of aliases to associate with the symbol.
+/// normalization : Transformer | None
+///     A transformer that is called after every normalization. Note that the symbol
+///     name cannot be used in the transformer as this will lead to a definition of the
+///     symbol. Use a wildcard with the same attributes instead.
+/// print : Callable[..., str | None] | None:
+///     A function that is called when printing the variable/function, which is provided as its first argument.
+///     This function should return a string, or `None` if the default print function should be used.
+///     The custom print function takes in keyword arguments that are the same as the arguments of the `format` function.
+/// derivative: Callable[[Expression, int], Expression] | None:
+///     A function that is called when computing the derivative of a function in a given argument.
+/// series: Callable[[Sequence[Series]], tuple[Expression, Expression] | None] | None:
+///     A function that is called for custom series expansion. It receives the argument series and can return
+///     the singular factor and regularized expression, or `None` to use the default series expansion.
+/// eval: dict[str, Any] | None:
+///     Numeric evaluation function(s). The dictionary may contain:
+///     - `tag_count: int`: the number of leading symbolic tag arguments.
+///     - `cpp: str`: a C++ function definition inserted into exported C++ code for this symbol.
+///
+///     For arbitrary precision evaluation of constant functions, register a function that
+///     maps the tags and the requested decimal precision to a number:
+///     - `constant`: (Sequence[Expression], int) -> Decimal | float | complex | tuple[Decimal, Decimal]]
+///
+///     Evaluators for non-constant functions when `tag_count = 0`:
+///     - `float`: Sequence[float] -> float
+///     - `complex`: Sequence[complex] -> complex
+///     - `decimal`: Sequence[Decimal] -> Decimal
+///     - `decimal_complex`: Sequence[tuple[Decimal, Decimal]] -> tuple[Decimal, Decimal]
+///
+///     Evaluators for non-constant functions when `tag_count > 0` are generators:
+///     - `float`: Sequence[Expression] -> (Sequence[float] -> float)
+///     - `complex`: Sequence[Expression] -> (Sequence[complex] -> complex)
+///     - `decimal`: Sequence[Expression] -> (Sequence[Decimal] -> Decimal)
+///     - `decimal_complex`: Sequence[Expression] -> (Sequence[tuple[Decimal, Decimal]] -> tuple[Decimal, Decimal])
+/// data: str | int | Expression | bytes | list | dict | None = None
+///     Custom user data to associate with the symbol.
 fn symbol_shorthand(
     names: &Bound<'_, PyTuple>,
     is_symmetric: Option<bool>,
@@ -1245,60 +1417,42 @@ PyFunctionInfo {
             ],
             r#return: || Vec::<PythonExpression>::type_output(),
             doc:
-r#"Create new symbols from `names`. Symbols can have attributes,
+            r#"Create new symbols from `names`. Symbols can have attributes,
 such as symmetries. If no attributes
 are specified and the symbol was previously defined, the attributes are inherited.
 Once attributes are defined on a symbol, they cannot be redefined later.
 
 Examples
 --------
-Define a regular symbol and use it as a variable:
->>> x = S('x')
->>> e = x**2 + 5
->>> print(e)
-x**2 + 5
+Define two regular symbols:
+>>> x, y = S('x', 'y')
 
-Define a regular symbol and use it as a function:
->>> f = S('f')
->>> e = f(1,2)
->>> print(e)
-f(1,2)
-
-
-Define a symmetric function:
->>> f = S('f', is_symmetric=True)
+Define two symmetric functions:
+>>> f, g = S('f', 'g', is_symmetric=True)
 >>> e = f(2,1)
->>> print(e)
-f(1,2)
-
-
-Define a linear and symmetric function:
->>> p1, p2, p3, p4 = S('p1', 'p2', 'p3', 'p4')
->>> dot = S('dot', is_symmetric=True, is_linear=True)
->>> e = dot(p2+2*p3,p1+3*p2-p3)
-dot(p1,p2)+2*dot(p1,p3)+3*dot(p2,p2)-dot(p2,p3)+6*dot(p2,p3)-2*dot(p3,p3)
+>>> print(e)  # f(1,2)
 
 Parameters
 ----------
-names : str
-    The name(s) of the symbol(s)
-is_symmetric : Optional[bool]
+*names : str
+    The name of the symbol
+is_symmetric : bool | None
     Set to true if the symbol is symmetric.
-is_antisymmetric : Optional[bool]
+is_antisymmetric : bool | None
     Set to true if the symbol is antisymmetric.
-is_cyclesymmetric : Optional[bool]
+is_cyclesymmetric : bool | None
     Set to true if the symbol is cyclesymmetric.
-is_linear : Optional[bool]
-    Set to true if the symbol is linear.
-is_scalar : Optional[bool]
+is_linear : bool | None
+    Set to true if the symbol is multilinear.
+is_scalar : bool | None
     Set to true if the symbol is a scalar. It will be moved out of linear functions.
-is_real : Optional[bool]
+is_real : bool | None
     Set to true if the symbol is a real number.
-is_integer : Optional[bool]
+is_integer : bool | None
     Set to true if the symbol is an integer.
-is_positive : Optional[bool]
+is_positive : bool | None
     Set to true if the symbol is a positive number.
-tags: Optional[Sequence[str]]
+tags: Sequence[str] | None = None
     A list of tags to associate with the symbol."#,
             module: Some("symbolica.core"),
             is_async: false,
@@ -1422,7 +1576,7 @@ PyFunctionInfo {
             ],
             r#return: || PythonExpression::type_output(),
             doc:
-r#"Create new symbols from a `name`. Symbols can have attributes,
+            r#"Create new symbols from `names`. Symbols can have attributes,
 such as symmetries. If no attributes
 are specified and the symbol was previously defined, the attributes are inherited.
 Once attributes are defined on a symbol, they cannot be redefined later.
@@ -1432,21 +1586,18 @@ Examples
 Define a regular symbol and use it as a variable:
 >>> x = S('x')
 >>> e = x**2 + 5
->>> print(e)
-x**2 + 5
+>>> print(e)  # x**2 + 5
 
 Define a regular symbol and use it as a function:
 >>> f = S('f')
 >>> e = f(1,2)
->>> print(e)
-f(1,2)
+>>> print(e)  # f(1,2)
 
 
 Define a symmetric function:
 >>> f = S('f', is_symmetric=True)
 >>> e = f(2,1)
->>> print(e)
-f(1,2)
+>>> print(e)  # f(1,2)
 
 
 Define a linear and symmetric function:
@@ -1477,52 +1628,63 @@ Define a custom derivative function:
 >>> x = S('x')
 >>> tag(3, x).derivative(x)
 
-Define a custom series function:
->>> def expand_tag(args: Sequence[Series]) -> tuple[Expression, Expression] | None:
->>>     return E("1/x"), args[0].to_expression()
->>> tag = S("tag", series=expand_tag)
+Define a custom series function that returns the principal part and the regular part,
+or `None` if a standard construction through the derivative can be used:
+>>> def inv_series(args: Sequence[Series]) -> tuple[Expression, Expression] | None:
+>>>     return (N(0), args[0].pow(-1).to_expression())
+>>>
+>>> t = S('t')
+>>> inv = S('inv', series=inv_series)
 
-Define a numeric evaluation function:
->>> sq = S("sq", eval={"complex": lambda args: args[0] * args[0]})
->>> x = S("x")
->>> ev = sq(x).evaluator([x])
->>> ev.evaluate_complex([2+0j])
+Define a function with a custom evaluation:
+>>> cosh = S(
+>>>     "my_cosh",
+>>>     eval={
+>>>         "float": lambda args: math.cosh(args[0]),
+>>>         "complex": lambda args: cmath.cosh(args[0]),
+>>>         "cpp": "template<typename T> T python_my_cosh(T a) { return std::cosh(a); }",
+>>>     },
+>>> )
+
+Add custom data to a symbol:
+>>> x = S('x', data={'my_tag': 'my_value'})
+>>> r = x.get_symbol_data('my_tag')
 
 Parameters
 ----------
 name : str
     The name of the symbol
-is_symmetric : Optional[bool]
+is_symmetric : bool | None
     Set to true if the symbol is symmetric.
-is_antisymmetric : Optional[bool]
+is_antisymmetric : bool | None
     Set to true if the symbol is antisymmetric.
-is_cyclesymmetric : Optional[bool]
+is_cyclesymmetric : bool | None
     Set to true if the symbol is cyclesymmetric.
-is_linear : Optional[bool]
+is_linear : bool | None
     Set to true if the symbol is linear.
-is_scalar : Optional[bool]
+is_scalar : bool | None
     Set to true if the symbol is a scalar. It will be moved out of linear functions.
-is_real : Optional[bool]
+is_real : bool | None
     Set to true if the symbol is a real number.
-is_integer : Optional[bool]
+is_integer : bool | None
     Set to true if the symbol is an integer.
-is_positive : Optional[bool]
+is_positive : bool | None
     Set to true if the symbol is a positive number.
-tags: Optional[Sequence[str]]
+tags: Sequence[str] | None = None
     A list of tags to associate with the symbol.
-aliases: Optional[Sequence[str]]
-    A list of aliases for the symbol.
-normalization : Optional[Transformer]
+aliases: Sequence[str] | None = None
+    A list of aliases to associate with the symbol.
+normalization : Transformer | None
     A transformer that is called after every normalization. Note that the symbol
     name cannot be used in the transformer as this will lead to a definition of the
     symbol. Use a wildcard with the same attributes instead.
-print : Optional[Callable[..., Optional[str]]]:
+print : Callable[..., str | None] | None:
     A function that is called when printing the variable/function, which is provided as its first argument.
     This function should return a string, or `None` if the default print function should be used.
     The custom print function takes in keyword arguments that are the same as the arguments of the `format` function.
-derivative: Optional[Callable[[Expression, int], Expression]]:
+derivative: Callable[[Expression, int], Expression] | None:
     A function that is called when computing the derivative of a function in a given argument.
-series: Optional[Callable[[Sequence[Series]], Optional[tuple[Expression, Expression]]]]:
+series: Callable[[Sequence[Series]], tuple[Expression, Expression] | None] | None:
     A function that is called for custom series expansion. It receives the argument series and can return
     the singular factor and regularized expression, or `None` to use the default series expansion.
 eval: dict[str, Any] | None:
@@ -1566,8 +1728,7 @@ data: str | int | Expression | bytes | list | dict | None = None
 /// Examples
 /// --------
 /// >>> e = N(1) / 2
-/// >>> print(e)
-/// 1/2
+/// >>> print(e)  # 1/2
 ///
 /// >>> print(N(1/3))
 /// >>> print(N(0.33, 0.1))
@@ -1577,6 +1738,13 @@ data: str | int | Expression | bytes | list | dict | None = None
 /// 1/3
 /// 3.33e-1
 /// 1.2340e-1
+///
+/// Parameters
+/// ----------
+/// num: int | float | complex | str | Decimal
+///     The value to convert into a Symbolica number.
+/// relative_error: float | None
+///     The maximum relative error used when converting floating-point input to a rational number.
 #[cfg_attr(
     feature = "python_stubgen",
     gen_stub_pyfunction(module = "symbolica.core")
@@ -1596,7 +1764,7 @@ fn number_shorthand(
 ///
 /// Parameters
 /// ----------
-/// input: str
+/// expr: str
 ///     An input string. UTF-8 characters are allowed.
 /// mode: ParseMode
 ///     The parsing mode to use. Use `ParseMode.Mathematica` to parse Mathematica expressions.
@@ -1649,6 +1817,29 @@ fn transformer_shorthand() -> PythonTransformer {
 }
 
 #[pyfunction(name = "P", signature = (expr, default_namespace=None, modulus = None, power = None, minimal_poly = None, vars = None))]
+/// Parse a string to a polynomial, optionally, with the variables and the ordering specified in `vars`.
+/// All non-polynomial elements will be converted to new independent variables.
+///
+/// The coefficients will be converted to finite field elements modulo `modulus`.
+/// If on top a `power` is provided, for example `(2, a)`, the polynomial will be converted to the Galois field
+/// `GF(modulus^2)` where `a` is the variable of the minimal polynomial of the field.
+///
+/// If a `minimal_poly` is provided, the Galois field will be created with `minimal_poly` as the minimal polynomial.
+///
+/// Parameters
+/// ----------
+/// expr: str
+///     The polynomial expression to parse.
+/// modulus: int
+///     The modulus that defines the finite field.
+/// default_namespace: str | None
+///     The namespace assumed for unqualified symbols during parsing.
+/// power: tuple[int, Expression] | None
+///     The extension degree and generator that define the finite field.
+/// minimal_poly: Polynomial | None
+///     The minimal polynomial that defines the algebraic extension.
+/// vars: Sequence[Expression] | None
+///     The variables to treat as polynomial variables, in the given order.
 fn poly_shorthand(
     expr: &str,
     default_namespace: Option<String>,
@@ -1693,9 +1884,18 @@ PyFunctionInfo {
             },
         ],
         r#return: || PythonPolynomial::type_output(),
-        doc:"
-Parse a string to a polynomial, optionally, with the variable ordering specified in `vars`.
-All non-polynomial parts will be converted to new, independent variables.",
+        doc:
+        r#"Parse a string to a polynomial, optionally, with the variable ordering specified in `vars`.
+All non-polynomial parts will be converted to new, independent variables.
+
+Parameters
+----------
+poly: str
+    The polynomial expression to parse.
+default_namespace: str | None
+    The namespace assumed for unqualified symbols during parsing.
+vars: Sequence[Expression] | None
+    The variables to treat as polynomial variables, in the given order."#,
         module: Some("symbolica.core"),
         is_async: false,
         deprecated: None,
@@ -1739,12 +1939,23 @@ submit! {
             },
         ],
         r#return: || PythonNumberFieldPolynomial::type_output(),
-        doc: "
-Parse a string to a polynomial, optionally, with the variables and the ordering specified in `vars`.
+        doc:
+        r#"Parse a string to a polynomial, optionally, with the variables and the ordering specified in `vars`.
 All non-polynomial elements will be converted to new independent variables.
 
 The coefficients will be converted to a number field with the minimal polynomial `minimal_poly`.
-The minimal polynomial must be a monic, irreducible univariate polynomial.",
+The minimal polynomial must be a monic, irreducible univariate polynomial.
+
+Parameters
+----------
+poly: str
+    The polynomial expression to parse.
+minimal_poly: Polynomial
+    The minimal polynomial that defines the algebraic extension.
+default_namespace: str | None
+    The namespace assumed for unqualified symbols during parsing.
+vars: Sequence[Expression] | None
+    The variables to treat as polynomial variables, in the given order."#,
         module: Some("symbolica.core"),
         is_async: false,
         deprecated: None,
@@ -1800,15 +2011,30 @@ submit! {
             },
         ],
         r#return: || PythonFiniteFieldPolynomial::type_output(),
-        doc: "
-Parse a string to a polynomial, optionally, with the variables and the ordering specified in `vars`.
+        doc:
+        r#"Parse a string to a polynomial, optionally, with the variables and the ordering specified in `vars`.
 All non-polynomial elements will be converted to new independent variables.
 
 The coefficients will be converted to finite field elements modulo `modulus`.
 If on top a `power` is provided, for example `(2, a)`, the polynomial will be converted to the Galois field
 `GF(modulus^2)` where `a` is the variable of the minimal polynomial of the field.
 
-If a `minimal_poly` is provided, the Galois field will be created with `minimal_poly` as the minimal polynomial.",
+If a `minimal_poly` is provided, the Galois field will be created with `minimal_poly` as the minimal polynomial.
+
+Parameters
+----------
+poly: str
+    The polynomial expression to parse.
+modulus: int
+    The modulus that defines the finite field.
+default_namespace: str | None
+    The namespace assumed for unqualified symbols during parsing.
+power: tuple[int, Expression] | None
+    The extension degree and generator that define the finite field.
+minimal_poly: Polynomial | None
+    The minimal polynomial that defines the algebraic extension.
+vars: Sequence[Expression] | None
+    The variables to treat as polynomial variables, in the given order."#,
         module: Some("symbolica.core"),
         is_async: false,
         deprecated: None,

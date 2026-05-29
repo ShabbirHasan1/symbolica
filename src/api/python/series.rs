@@ -168,12 +168,54 @@ impl PythonSeries {
         ))
     }
 
-    /// Convert the expression into a human-readable string, with tunable settings.
+    /// Convert the series into a human-readable string.
     ///
-    /// Examples
-    /// --------
-    /// >>> a = E('128378127123 z^(2/3)*w^2/x/y + y^4 + z^34 + x^(x+2)+3/5+f(x,x^2)')
-    /// >>> print(a.format(number_thousands_separator='_', multiplication_operator=' '))
+    /// Parameters
+    /// ----------
+    /// mode: PrintMode
+    ///     The mode that controls how the input is interpreted or formatted.
+    /// max_line_length: int | None
+    ///     The preferred maximum line length before wrapping.
+    /// indentation: int
+    ///     The number of spaces used for wrapped lines.
+    /// fill_indented_lines: bool
+    ///     Whether wrapped lines should be padded to the configured indentation.
+    /// terms_on_new_line: bool
+    ///     Whether wrapped output should place terms on separate lines.
+    /// color_top_level_sum: bool
+    ///     Whether top-level sums should be colorized.
+    /// color_builtin_symbols: bool
+    ///     Whether built-in symbols should be colorized.
+    /// bracket_level_colors: Sequence[int] | None
+    ///     The colors assigned to successive nested bracket levels.
+    /// print_ring: bool
+    ///     Whether the coefficient ring should be included in the printed output.
+    /// symmetric_representation_for_finite_field: bool
+    ///     Whether finite-field elements should be printed using symmetric representatives.
+    /// explicit_rational_polynomial: bool
+    ///     Whether rational polynomials should be printed explicitly as numerator and denominator.
+    /// number_thousands_separator: str | None
+    ///     The separator inserted between groups of digits in printed integers.
+    /// multiplication_operator: str
+    ///     The string used to print multiplication.
+    /// double_star_for_exponentiation: bool
+    ///     Whether exponentiation should be printed as `**` instead of `^`.
+    /// function_brackets: tuple[str, str]
+    ///     The opening and closing brackets used when printing function arguments.
+    /// num_exp_as_superscript: bool
+    ///     Whether small integer exponents should be printed as superscripts.
+    /// precision: int | None
+    ///     The decimal precision used when printing numeric coefficients.
+    /// show_namespaces: bool
+    ///     Whether namespaces should be included in the formatted output.
+    /// hide_namespace: str | None
+    ///     A namespace prefix to omit from printed symbol names.
+    /// include_attributes: bool
+    ///     Whether symbol attributes should be included in the printed output.
+    /// max_terms: int | None
+    ///     The maximum number of terms to print before truncating the output.
+    /// custom_print_mode: dict[str, int | str | dict[str | int, Any]] | None
+    ///     Custom print data passed through to custom print callbacks.
     #[pyo3(signature =
         (mode = PythonPrintMode::Symbolica,
             max_line_length = Some(80),
@@ -322,6 +364,11 @@ impl PythonSeries {
     }
 
     /// Shift the series by `e` units of the ramification.
+    ///
+    /// Parameters
+    /// ----------
+    /// e: int
+    ///     The shift measured in units of the series ramification.
     pub fn shift(&self, e: isize) -> Self {
         Self {
             series: self.series.clone().mul_exp_units(e),
@@ -499,12 +546,29 @@ impl PythonTermStreamer {
         self.stream.normalize();
     }
 
-    /// Convert the term stream into an expression. This may exceed the available memory.
+    /// Create a new term streamer with a given path for its files,
+    /// the maximum size of the memory buffer and the number of cores.
+    ///
+    /// Parameters
+    /// ----------
+    /// path: str | None
+    ///     The directory used for the streamer's temporary files.
+    /// max_mem_bytes: int | None
+    ///     The maximum in-memory buffer size in bytes.
+    /// n_cores: int | None
+    ///     The number of CPU cores used for streaming operations.
     pub fn to_expression(&mut self) -> PythonExpression {
         self.stream.to_expression().into()
     }
 
-    /// Map the transformations to every term in the stream.
+    /// Apply a transformer to all terms in the stream.
+    ///
+    /// Parameters
+    /// ----------
+    /// op: Transformer
+    ///     The transformer to apply.
+    /// stats_to_file: str, optional
+    ///     If set, the output of the `stats` transformer will be written to a file in JSON format.
     #[pyo3(signature = (op, stats_to_file=None))]
     pub fn map(
         &mut self,
@@ -551,7 +615,7 @@ impl PythonTermStreamer {
     ///
     /// Parameters
     /// ----------
-    /// f: Transformer
+    /// op: Transformer
     ///     The transformer to apply.
     /// stats_to_file: str, optional
     ///     If set, the output of the `stats` transformer will be written to a file in JSON format.
