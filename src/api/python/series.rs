@@ -17,6 +17,109 @@ pub struct PythonSeries {
     pub series: Series<AtomField>,
 }
 
+impl PythonSeries {
+    fn format_latex_with_options(
+        &self,
+        max_line_length: Option<usize>,
+        max_terms: Option<usize>,
+        precision: Option<usize>,
+        show_namespaces: bool,
+        hide_namespace: Option<&str>,
+        include_attributes: bool,
+        custom_print_mode: Option<HashMap<String, PythonPrintUserData>>,
+    ) -> String {
+        format!(
+            "$${}$$",
+            self.series.format_string(
+                &PrintOptions {
+                    max_line_length,
+                    precision,
+                    hide_all_namespaces: !show_namespaces,
+                    hide_namespace: if show_namespaces {
+                        hide_namespace.map(|x| std::borrow::Cow::Owned(x.to_owned()))
+                    } else {
+                        None
+                    },
+                    include_attributes,
+                    max_terms,
+                    custom_print_mode: custom_print_mode
+                        .map(|m| m.into_iter().map(|(k, v)| (k, v.0)).collect())
+                        .unwrap_or_default(),
+                    ..(*LATEX_PRINT_OPTIONS).clone()
+                },
+                PrintState::new(),
+            )
+        )
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    fn format_with_color_mode(
+        &self,
+        mode: PythonPrintMode,
+        max_line_length: Option<usize>,
+        indentation: usize,
+        fill_indented_lines: bool,
+        terms_on_new_line: bool,
+        color_top_level_sum: bool,
+        color_builtin_symbols: bool,
+        bracket_level_colors: Option<[u8; 16]>,
+        print_ring: bool,
+        symmetric_representation_for_finite_field: bool,
+        explicit_rational_polynomial: bool,
+        number_thousands_separator: Option<char>,
+        multiplication_operator: char,
+        double_star_for_exponentiation: bool,
+        function_brackets: (char, char),
+        num_exp_as_superscript: bool,
+        precision: Option<usize>,
+        show_namespaces: bool,
+        hide_namespace: Option<&str>,
+        include_attributes: bool,
+        max_terms: Option<usize>,
+        custom_print_mode: Option<HashMap<String, PythonPrintUserData>>,
+        color_mode: ColorMode,
+    ) -> String {
+        self.series
+            .format_string(
+                &PrintOptions {
+                    max_line_length,
+                    indentation,
+                    fill_indented_lines,
+                    terms_on_new_line,
+                    color_mode,
+                    color_top_level_sum,
+                    color_builtin_symbols,
+                    bracket_level_colors,
+                    print_ring,
+                    symmetric_representation_for_finite_field,
+                    explicit_rational_polynomial,
+                    number_thousands_separator,
+                    multiplication_operator,
+                    double_star_for_exponentiation,
+                    function_brackets,
+                    num_exp_as_superscript,
+                    mode: mode.into(),
+                    precision,
+                    pretty_matrix: false,
+                    hide_all_namespaces: !show_namespaces,
+                    color_namespace: true,
+                    hide_namespace: if show_namespaces {
+                        hide_namespace.map(|x| std::borrow::Cow::Owned(x.to_owned()))
+                    } else {
+                        None
+                    },
+                    include_attributes,
+                    max_terms,
+                    custom_print_mode: custom_print_mode
+                        .map(|m| m.into_iter().map(|(k, v)| (k, v.0)).collect())
+                        .unwrap_or_default(),
+                },
+                PrintState::new(),
+            )
+            .to_string()
+    }
+}
+
 #[cfg_attr(feature = "python_stubgen", gen_stub_pymethods)]
 #[cfg_attr(not(feature = "python_stubgen"), remove_gen_stub)]
 #[pymethods]
@@ -159,6 +262,82 @@ impl PythonSeries {
             .format_string(&*DEFAULT_PRINT_OPTIONS, PrintState::new()))
     }
 
+    /// Convert the series into an HTML representation.
+    pub fn _repr_html_(&self) -> PyResult<String> {
+        let formatted = self.format_with_color_mode(
+            PythonPrintMode::Symbolica,
+            Some(80),
+            4,
+            true,
+            false,
+            true,
+            true,
+            Some([
+                244, 25, 97, 36, 38, 40, 42, 44, 46, 48, 50, 52, 54, 56, 58, 60,
+            ]),
+            true,
+            false,
+            false,
+            None,
+            '·',
+            false,
+            ('(', ')'),
+            true,
+            None,
+            false,
+            None,
+            false,
+            Some(100),
+            None,
+            ColorMode::Always,
+        );
+
+        Ok(crate::printer::AnsiHtmlFormatter::new(&formatted).to_string())
+    }
+
+    /// Convert the series into a LaTeX representation.
+    pub fn _repr_latex_(&self) -> PyResult<String> {
+        self.to_latex()
+    }
+
+    /// Convert the series into a pretty string representation.
+    pub fn _repr_pretty_(&self, pretty: &Bound<'_, PyAny>, cycle: bool) -> PyResult<()> {
+        let text = if cycle {
+            "...".to_string()
+        } else {
+            self.format_with_color_mode(
+                PythonPrintMode::Symbolica,
+                Some(80),
+                4,
+                true,
+                false,
+                true,
+                true,
+                Some([
+                    244, 25, 97, 36, 38, 40, 42, 44, 46, 48, 50, 52, 54, 56, 58, 60,
+                ]),
+                true,
+                false,
+                false,
+                None,
+                '·',
+                false,
+                ('(', ')'),
+                true,
+                None,
+                false,
+                None,
+                false,
+                Some(100),
+                None,
+                ColorMode::Never,
+            )
+        };
+
+        pretty.call_method1("text", (text,))?;
+        Ok(())
+    }
+
     /// Convert the series into a LaTeX string.
     pub fn to_latex(&self) -> PyResult<String> {
         Ok(format!(
@@ -267,45 +446,154 @@ impl PythonSeries {
         max_terms: Option<usize>,
         custom_print_mode: Option<HashMap<String, PythonPrintUserData>>,
     ) -> PyResult<String> {
-        Ok(self
-            .series
-            .format_string(
-                &PrintOptions {
-                    max_line_length,
-                    indentation,
-                    fill_indented_lines,
-                    terms_on_new_line,
-                    color_mode: ColorMode::Auto,
-                    color_top_level_sum,
-                    color_builtin_symbols,
-                    bracket_level_colors,
-                    print_ring,
-                    symmetric_representation_for_finite_field,
-                    explicit_rational_polynomial,
-                    number_thousands_separator,
-                    multiplication_operator,
-                    double_star_for_exponentiation,
-                    function_brackets,
-                    num_exp_as_superscript,
-                    mode: mode.into(),
-                    precision,
-                    pretty_matrix: false,
-                    hide_all_namespaces: !show_namespaces,
-                    color_namespace: true,
-                    hide_namespace: if show_namespaces {
-                        hide_namespace.map(|x| std::borrow::Cow::Owned(x.to_owned()))
-                    } else {
-                        None
-                    },
-                    include_attributes,
-                    max_terms,
-                    custom_print_mode: custom_print_mode
-                        .map(|m| m.into_iter().map(|(k, v)| (k, v.0)).collect())
-                        .unwrap_or_default(),
-                },
-                PrintState::new(),
-            )
-            .to_string())
+        Ok(self.format_with_color_mode(
+            mode,
+            max_line_length,
+            indentation,
+            fill_indented_lines,
+            terms_on_new_line,
+            color_top_level_sum,
+            color_builtin_symbols,
+            bracket_level_colors,
+            print_ring,
+            symmetric_representation_for_finite_field,
+            explicit_rational_polynomial,
+            number_thousands_separator,
+            multiplication_operator,
+            double_star_for_exponentiation,
+            function_brackets,
+            num_exp_as_superscript,
+            precision,
+            show_namespaces,
+            hide_namespace,
+            include_attributes,
+            max_terms,
+            custom_print_mode,
+            ColorMode::Auto,
+        ))
+    }
+
+    /// Convert the series into a rich display object, with tunable settings.
+    ///
+    /// In notebooks, the returned object displays as highlighted HTML while
+    /// `str(...)` returns the plain formatted text.
+    #[pyo3(signature =
+        (max_terms = None,
+            mode = PythonPrintMode::Symbolica,
+            max_line_length = Some(80),
+            indentation = 4,
+            fill_indented_lines = true,
+            terms_on_new_line = false,
+            color_top_level_sum = true,
+            color_builtin_symbols = true,
+            bracket_level_colors = Some([
+                244, 25, 97, 36, 38, 40, 42, 44, 46, 48, 50, 52, 54, 56, 58, 60,
+            ]),
+            print_ring = true,
+            symmetric_representation_for_finite_field = false,
+            explicit_rational_polynomial = false,
+            number_thousands_separator = None,
+            multiplication_operator = '·',
+            double_star_for_exponentiation = false,
+            function_brackets = ('(',')'),
+            num_exp_as_superscript = true,
+            precision = None,
+            show_namespaces = false,
+            hide_namespace = None,
+            include_attributes = false,
+            custom_print_mode = None)
+        )]
+    pub fn formatted(
+        &self,
+        max_terms: Option<usize>,
+        mode: PythonPrintMode,
+        max_line_length: Option<usize>,
+        indentation: usize,
+        fill_indented_lines: bool,
+        terms_on_new_line: bool,
+        color_top_level_sum: bool,
+        color_builtin_symbols: bool,
+        bracket_level_colors: Option<[u8; 16]>,
+        print_ring: bool,
+        symmetric_representation_for_finite_field: bool,
+        explicit_rational_polynomial: bool,
+        number_thousands_separator: Option<char>,
+        multiplication_operator: char,
+        double_star_for_exponentiation: bool,
+        function_brackets: (char, char),
+        num_exp_as_superscript: bool,
+        precision: Option<usize>,
+        show_namespaces: bool,
+        hide_namespace: Option<&str>,
+        include_attributes: bool,
+        custom_print_mode: Option<HashMap<String, PythonPrintUserData>>,
+    ) -> PyResult<PythonFormattedOutput> {
+        let text = self.format_with_color_mode(
+            mode,
+            max_line_length,
+            indentation,
+            fill_indented_lines,
+            terms_on_new_line,
+            color_top_level_sum,
+            color_builtin_symbols,
+            bracket_level_colors,
+            print_ring,
+            symmetric_representation_for_finite_field,
+            explicit_rational_polynomial,
+            number_thousands_separator,
+            multiplication_operator,
+            double_star_for_exponentiation,
+            function_brackets,
+            num_exp_as_superscript,
+            precision,
+            show_namespaces,
+            hide_namespace,
+            include_attributes,
+            max_terms,
+            custom_print_mode.clone(),
+            ColorMode::Never,
+        );
+
+        let formatted = self.format_with_color_mode(
+            mode,
+            max_line_length,
+            indentation,
+            fill_indented_lines,
+            terms_on_new_line,
+            color_top_level_sum,
+            color_builtin_symbols,
+            bracket_level_colors,
+            print_ring,
+            symmetric_representation_for_finite_field,
+            explicit_rational_polynomial,
+            number_thousands_separator,
+            multiplication_operator,
+            double_star_for_exponentiation,
+            function_brackets,
+            num_exp_as_superscript,
+            precision,
+            show_namespaces,
+            hide_namespace,
+            include_attributes,
+            max_terms,
+            custom_print_mode.clone(),
+            ColorMode::Always,
+        );
+        let latex = self.format_latex_with_options(
+            max_line_length,
+            max_terms,
+            precision,
+            show_namespaces,
+            hide_namespace,
+            include_attributes,
+            custom_print_mode,
+        );
+
+        Ok(PythonFormattedOutput {
+            text,
+            html: Some(crate::printer::AnsiHtmlFormatter::new(&formatted).to_string()),
+            latex: Some(latex),
+        })
     }
 
     pub fn sin(&self) -> PyResult<Self> {
