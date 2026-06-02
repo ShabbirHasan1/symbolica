@@ -861,6 +861,32 @@ pub trait AtomCore: private::Sealed + Sized {
         self.as_atom_view().evaluate(map, binary_prec)
     }
 
+    /// Evaluate an expression in a given ring.
+    ///
+    /// All variables and all user functions that do not have an evaluation hook,
+    /// must occur in the map.
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// # use ahash::HashMap;
+    /// use symbolica::prelude::*;
+    /// let expr = parse!("1/3*x^2 + 2");
+    /// let x = parse!("x");
+    /// let mut const_map = HashMap::default();
+    /// let r = Zp::new(5);
+    /// const_map.insert(x.clone(), r.nth(3.into()));
+    /// let result = expr.evaluate_in_ring(&const_map, &r).unwrap();
+    /// assert_eq!(result, r.zero());
+    /// ```
+    fn evaluate_in_ring<A: AtomCore + KeyLookup, R: ConvertToRing>(
+        &self,
+        map: &HashMap<A, R::Element>,
+        ring: &R,
+    ) -> Result<R::Element, EvaluationError> {
+        self.as_atom_view().evaluate_in_ring(map, ring)
+    }
+
     /// Create an efficient evaluator for a (nested) expression.
     /// All free parameters must appear in `params` and all nested functions
     /// must be registered using [`EvaluatorBuilder::add_function`] or [`EvaluatorBuilder::add_tagged_function`].

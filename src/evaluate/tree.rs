@@ -1,3 +1,5 @@
+use crate::coefficient::ConvertToRing;
+
 use super::*;
 
 /// Errors that can occur while building or performing numerical expression evaluation.
@@ -3978,6 +3980,153 @@ impl<'a> AtomView<'a> {
             }
         }
     }
+
+    pub(crate) fn evaluate_in_ring<A: AtomCore + KeyLookup, R: ConvertToRing>(
+        &self,
+        map: &HashMap<A, R::Element>,
+        ring: &R,
+    ) -> Result<R::Element, EvaluationError> {
+        self.evaluate_in_ring_impl(map, &mut HashMap::new(), ring)
+    }
+
+    fn evaluate_in_ring_impl<A: AtomCore + KeyLookup, R: ConvertToRing>(
+        &self,
+        map: &HashMap<A, R::Element>,
+        cache: &mut HashMap<AtomView<'a>, R::Element>,
+        ring: &R,
+    ) -> Result<R::Element, EvaluationError> {
+        match self {
+            AtomView::Num(n) => ring
+                .try_element_from_coefficient_view(n.get_coeff_view())
+                .map_err(|e| EvaluationError::UnsupportedCoefficient { coefficient: e }),
+            AtomView::Var(v) => {
+                let s = v.get_symbol();
+
+                if let Some(val) = map.get::<[u8]>(self.get_data()) {
+                    return Ok(val.clone());
+                }
+
+                if let Some(val) = cache.get(self) {
+                    return Ok(val.clone());
+                }
+
+                Err(EvaluationError::UndefinedVariable { symbol: s })
+            }
+            AtomView::Fun(f) => {
+                let name = f.get_symbol();
+                if [
+                    Symbol::EXP_ID,
+                    Symbol::LOG_ID,
+                    Symbol::SIN_ID,
+                    Symbol::COS_ID,
+                    Symbol::SQRT_ID,
+                    Symbol::ABS_ID,
+                    Symbol::CONJ_ID,
+                ]
+                .contains(&name.get_id())
+                {
+                    return Err(EvaluationError::UnsupportedBuiltinArity {
+                        function: name,
+                        expected: 1,
+                        actual: f.get_nargs(),
+                    });
+                }
+
+                if name == Symbol::IF {
+                    if f.get_nargs() != 3 {
+                        return Err(EvaluationError::WrongNumberOfArguments {
+                            function: name,
+                            expected: 3,
+                            actual: f.get_nargs(),
+                        });
+                    }
+
+                    let mut arg_iter = f.iter();
+
+                    let cond_eval = arg_iter
+                        .next()
+                        .unwrap()
+                        .evaluate_in_ring_impl(map, cache, ring)?;
+
+                    if !ring.is_zero(&cond_eval) {
+                        let t_eval = arg_iter
+                            .next()
+                            .unwrap()
+                            .evaluate_in_ring_impl(map, cache, ring)?;
+                        return Ok(t_eval);
+                    } else {
+                        let _ = arg_iter.next().unwrap();
+                        let f_eval = arg_iter
+                            .next()
+                            .unwrap()
+                            .evaluate_in_ring_impl(map, cache, ring)?;
+                        return Ok(f_eval);
+                    }
+                }
+
+                if let Some(val) = map.get::<[u8]>(self.get_data()) {
+                    return Ok(val.clone());
+                }
+
+                if let Some(eval) = cache.get(self) {
+                    return Ok(eval.clone());
+                }
+
+                Err(EvaluationError::UndefinedFunction {
+                    expression: self.to_owned(),
+                })
+            }
+            AtomView::Pow(p) => {
+                let (b, e) = p.get_base_exp();
+                let mut b_eval = b.evaluate_in_ring_impl(map, cache, ring)?;
+
+                if let AtomView::Num(n) = e
+                    && let CoefficientView::Natural(num, den, ni, _di) = n.get_coeff_view()
+                    && den == 1
+                    && ni == 0
+                {
+                    if num < 0 {
+                        b_eval = ring.try_inv(&b_eval).ok_or_else(|| {
+                            EvaluationError::EvaluationFailed {
+                                expression: self.to_owned(),
+                                reason: format!("Could not invert {}", ring.printer(&b_eval)),
+                            }
+                        })?;
+                    }
+
+                    let num = num.unsigned_abs();
+
+                    if num != 1 {
+                        Ok(ring.pow(&b_eval, num as u64))
+                    } else {
+                        Ok(b_eval)
+                    }
+                } else {
+                    Err(EvaluationError::EvaluationFailed {
+                        expression: self.to_owned(),
+                        reason: format!("Cannot evaluate {}", self),
+                    })
+                }
+            }
+            AtomView::Mul(m) => {
+                let mut it = m.iter();
+                let mut r = it.next().unwrap().evaluate_in_ring_impl(map, cache, ring)?;
+                for arg in it {
+                    ring.mul_assign(&mut r, arg.evaluate_in_ring_impl(map, cache, ring)?);
+                }
+                Ok(r)
+            }
+            AtomView::Add(a) => {
+                let mut it = a.iter();
+                let mut r = it.next().unwrap().evaluate_in_ring_impl(map, cache, ring)?;
+                for arg in it {
+                    ring.add_assign(&mut r, arg.evaluate_in_ring_impl(map, cache, ring)?);
+                }
+                Ok(r)
+            }
+        }
+    }
+
     /// Check if the expression could be 0, using (potentially) numerical sampling with
     /// a given tolerance and number of iterations.
     pub fn zero_test(&self, iterations: usize, tolerance: f64) -> ConditionResult {
