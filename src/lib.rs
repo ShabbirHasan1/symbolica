@@ -108,6 +108,7 @@ pub mod prelude {
         EuclideanDomain, Field, Ring, RingOps, Set,
         algebraic_number::{AlgebraicExtension, AlgebraicNumber},
         atom::AtomField,
+        dual::HyperDual,
         factorized_rational_polynomial::FactorizedRationalPolynomial,
         finite_field::{FiniteField, FiniteFieldCore, FiniteFieldElement, Z2, Zp, Zp64},
         float::{

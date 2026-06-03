@@ -79,7 +79,7 @@ mod test {
         atom::{Atom, AtomCore, EvaluationInfo},
         create_hyperdual_from_components,
         domains::{
-            float::{Complex, Float, FloatLike},
+            float::{Complex, Float},
             rational::Rational,
         },
         evaluate::{
