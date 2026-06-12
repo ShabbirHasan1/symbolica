@@ -7,8 +7,8 @@ use rayon::ThreadPool;
 
 use crate::{
     atom::{
-        AddView, FunctionBuilder, Indeterminate, KeyLookup, MulView, NumView, VarView,
-        representation::FunView,
+        AddView, AliasedAtom, AtomType, FunctionBuilder, Indeterminate, KeyLookup, MulView,
+        NumView, VarView, representation::FunView,
     },
     coefficient::{Coefficient, CoefficientView, ConvertToRing},
     domains::{
@@ -26,8 +26,8 @@ use crate::{
     },
     evaluate::{EvaluationDomain, EvaluatorBuilder},
     id::{
-        AliasedAtom, BorrowReplacement, Condition, ConditionResult, Context, MatchSettings,
-        Pattern, PatternAtomTreeIterator, PatternRestriction, ReplaceBuilder, ReplaceSettings,
+        BorrowReplacement, Condition, ConditionResult, Context, MatchSettings, Pattern,
+        PatternAtomTreeIterator, PatternRestriction, ReplaceBuilder, ReplaceSettings,
     },
     poly::{
         Exponent, IntoVariableMap, PositiveExponent,
@@ -111,6 +111,17 @@ pub trait AtomCore: private::Sealed + Sized {
         match self.as_atom_view() {
             AtomView::Add(a) => Some(a),
             _ => None,
+        }
+    }
+
+    fn get_atom_type(&self) -> AtomType {
+        match self.as_atom_view() {
+            AtomView::Num(_) => AtomType::Num,
+            AtomView::Var(_) => AtomType::Var,
+            AtomView::Fun(_) => AtomType::Fun,
+            AtomView::Pow(_) => AtomType::Pow,
+            AtomView::Mul(_) => AtomType::Mul,
+            AtomView::Add(_) => AtomType::Add,
         }
     }
 

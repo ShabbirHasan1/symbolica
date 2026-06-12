@@ -1,4 +1,4 @@
-use crate::atom::{Atom, AtomView, InlineVar, Symbol};
+use crate::atom::{AliasedAtom, Atom, AtomView, InlineVar, Symbol};
 use crate::coefficient::Coefficient;
 use crate::domains::{float::Complex, integer::Integer, rational::Rational};
 use crate::state::Workspace;
@@ -166,6 +166,178 @@ macro_rules! impl_binary_ops {
             }
         }
 
+        impl std::ops::$op_trait<Atom> for AliasedAtom {
+            type Output = AliasedAtom;
+            fn $op_method(self, rhs: Atom) -> AliasedAtom {
+                let AliasedAtom { root, aliases } = self;
+                AliasedAtom {
+                    root: atom_op_views!(root.as_view(), $op_ws_fn, rhs.as_view()),
+                    aliases,
+                }
+            }
+        }
+
+        impl std::ops::$op_trait<Atom> for &AliasedAtom {
+            type Output = AliasedAtom;
+            fn $op_method(self, rhs: Atom) -> AliasedAtom {
+                AliasedAtom {
+                    root: atom_op_views!(self.root.as_view(), $op_ws_fn, rhs.as_view()),
+                    aliases: self.aliases.clone(),
+                }
+            }
+        }
+
+        impl std::ops::$op_trait<&Atom> for AliasedAtom {
+            type Output = AliasedAtom;
+            fn $op_method(self, rhs: &Atom) -> AliasedAtom {
+                let AliasedAtom { root, aliases } = self;
+                AliasedAtom {
+                    root: atom_op_views!(root.as_view(), $op_ws_fn, rhs.as_view()),
+                    aliases,
+                }
+            }
+        }
+
+        impl std::ops::$op_trait<&Atom> for &AliasedAtom {
+            type Output = AliasedAtom;
+            fn $op_method(self, rhs: &Atom) -> AliasedAtom {
+                AliasedAtom {
+                    root: atom_op_views!(self.root.as_view(), $op_ws_fn, rhs.as_view()),
+                    aliases: self.aliases.clone(),
+                }
+            }
+        }
+
+        impl std::ops::$op_trait<AtomView<'_>> for AliasedAtom {
+            type Output = AliasedAtom;
+            fn $op_method(self, rhs: AtomView<'_>) -> AliasedAtom {
+                let AliasedAtom { root, aliases } = self;
+                AliasedAtom {
+                    root: atom_op_views!(root.as_view(), $op_ws_fn, rhs),
+                    aliases,
+                }
+            }
+        }
+
+        impl std::ops::$op_trait<AtomView<'_>> for &AliasedAtom {
+            type Output = AliasedAtom;
+            fn $op_method(self, rhs: AtomView<'_>) -> AliasedAtom {
+                AliasedAtom {
+                    root: atom_op_views!(self.root.as_view(), $op_ws_fn, rhs),
+                    aliases: self.aliases.clone(),
+                }
+            }
+        }
+
+        impl std::ops::$op_trait<Symbol> for AliasedAtom {
+            type Output = AliasedAtom;
+            fn $op_method(self, rhs: Symbol) -> AliasedAtom {
+                let rhs = InlineVar::new(rhs);
+                let AliasedAtom { root, aliases } = self;
+                AliasedAtom {
+                    root: atom_op_views!(root.as_view(), $op_ws_fn, rhs.as_view()),
+                    aliases,
+                }
+            }
+        }
+
+        impl std::ops::$op_trait<Symbol> for &AliasedAtom {
+            type Output = AliasedAtom;
+            fn $op_method(self, rhs: Symbol) -> AliasedAtom {
+                let rhs = InlineVar::new(rhs);
+                AliasedAtom {
+                    root: atom_op_views!(self.root.as_view(), $op_ws_fn, rhs.as_view()),
+                    aliases: self.aliases.clone(),
+                }
+            }
+        }
+
+        impl std::ops::$op_trait<AliasedAtom> for Atom {
+            type Output = AliasedAtom;
+            fn $op_method(self, rhs: AliasedAtom) -> AliasedAtom {
+                let AliasedAtom { root, aliases } = rhs;
+                AliasedAtom {
+                    root: atom_op_views!(self.as_view(), $op_ws_fn, root.as_view()),
+                    aliases,
+                }
+            }
+        }
+
+        impl std::ops::$op_trait<&AliasedAtom> for Atom {
+            type Output = AliasedAtom;
+            fn $op_method(self, rhs: &AliasedAtom) -> AliasedAtom {
+                AliasedAtom {
+                    root: atom_op_views!(self.as_view(), $op_ws_fn, rhs.root.as_view()),
+                    aliases: rhs.aliases.clone(),
+                }
+            }
+        }
+
+        impl std::ops::$op_trait<AliasedAtom> for &Atom {
+            type Output = AliasedAtom;
+            fn $op_method(self, rhs: AliasedAtom) -> AliasedAtom {
+                let AliasedAtom { root, aliases } = rhs;
+                AliasedAtom {
+                    root: atom_op_views!(self.as_view(), $op_ws_fn, root.as_view()),
+                    aliases,
+                }
+            }
+        }
+
+        impl std::ops::$op_trait<&AliasedAtom> for &Atom {
+            type Output = AliasedAtom;
+            fn $op_method(self, rhs: &AliasedAtom) -> AliasedAtom {
+                AliasedAtom {
+                    root: atom_op_views!(self.as_view(), $op_ws_fn, rhs.root.as_view()),
+                    aliases: rhs.aliases.clone(),
+                }
+            }
+        }
+
+        impl std::ops::$op_trait<AliasedAtom> for AtomView<'_> {
+            type Output = AliasedAtom;
+            fn $op_method(self, rhs: AliasedAtom) -> AliasedAtom {
+                let AliasedAtom { root, aliases } = rhs;
+                AliasedAtom {
+                    root: atom_op_views!(self, $op_ws_fn, root.as_view()),
+                    aliases,
+                }
+            }
+        }
+
+        impl std::ops::$op_trait<&AliasedAtom> for AtomView<'_> {
+            type Output = AliasedAtom;
+            fn $op_method(self, rhs: &AliasedAtom) -> AliasedAtom {
+                AliasedAtom {
+                    root: atom_op_views!(self, $op_ws_fn, rhs.root.as_view()),
+                    aliases: rhs.aliases.clone(),
+                }
+            }
+        }
+
+        impl std::ops::$op_trait<AliasedAtom> for Symbol {
+            type Output = AliasedAtom;
+            fn $op_method(self, rhs: AliasedAtom) -> AliasedAtom {
+                let lhs = InlineVar::new(self);
+                let AliasedAtom { root, aliases } = rhs;
+                AliasedAtom {
+                    root: atom_op_views!(lhs.as_view(), $op_ws_fn, root.as_view()),
+                    aliases,
+                }
+            }
+        }
+
+        impl std::ops::$op_trait<&AliasedAtom> for Symbol {
+            type Output = AliasedAtom;
+            fn $op_method(self, rhs: &AliasedAtom) -> AliasedAtom {
+                let lhs = InlineVar::new(self);
+                AliasedAtom {
+                    root: atom_op_views!(lhs.as_view(), $op_ws_fn, rhs.root.as_view()),
+                    aliases: rhs.aliases.clone(),
+                }
+            }
+        }
+
         impl<T: Into<Coefficient>> std::ops::$op_trait<T> for Symbol {
             type Output = Atom;
             fn $op_method(self, rhs: T) -> Atom {
@@ -185,6 +357,27 @@ macro_rules! impl_binary_ops {
             type Output = Atom;
             fn $op_method(self, rhs: T) -> Atom {
                 atom_op_num_rhs!(self.as_view(), $op_ws_fn, rhs)
+            }
+        }
+
+        impl<T: Into<Coefficient>> std::ops::$op_trait<T> for AliasedAtom {
+            type Output = AliasedAtom;
+            fn $op_method(self, rhs: T) -> AliasedAtom {
+                let AliasedAtom { root, aliases } = self;
+                AliasedAtom {
+                    root: atom_op_num_rhs!(root.as_view(), $op_ws_fn, rhs),
+                    aliases,
+                }
+            }
+        }
+
+        impl<T: Into<Coefficient>> std::ops::$op_trait<T> for &AliasedAtom {
+            type Output = AliasedAtom;
+            fn $op_method(self, rhs: T) -> AliasedAtom {
+                AliasedAtom {
+                    root: atom_op_num_rhs!(self.root.as_view(), $op_ws_fn, rhs),
+                    aliases: self.aliases.clone(),
+                }
             }
         }
     };
@@ -231,6 +424,33 @@ macro_rules! impl_numeric_lhs_atom_ops {
     };
 }
 
+macro_rules! impl_numeric_lhs_aliased_atom_ops {
+    ($op_trait:ident, $op_method:ident, $op_ws_fn:ident, $($ty:ty),+ $(,)?) => {
+        $(
+            impl std::ops::$op_trait<AliasedAtom> for $ty {
+                type Output = AliasedAtom;
+                fn $op_method(self, rhs: AliasedAtom) -> AliasedAtom {
+                    let AliasedAtom { root, aliases } = rhs;
+                    AliasedAtom {
+                        root: atom_op_num_lhs!(self, $op_ws_fn, root.as_view()),
+                        aliases,
+                    }
+                }
+            }
+
+            impl std::ops::$op_trait<&AliasedAtom> for $ty {
+                type Output = AliasedAtom;
+                fn $op_method(self, rhs: &AliasedAtom) -> AliasedAtom {
+                    AliasedAtom {
+                        root: atom_op_num_lhs!(self, $op_ws_fn, rhs.root.as_view()),
+                        aliases: rhs.aliases.clone(),
+                    }
+                }
+            }
+        )+
+    };
+}
+
 macro_rules! impl_domain_lhs_atom_ops {
     ($op_trait:ident, $op_method:ident, $op_ws_fn:ident, $($ty:ty),+ $(,)?) => {
         $(
@@ -248,6 +468,15 @@ macro_rules! impl_domain_lhs_atom_ops {
                 }
             }
         )+
+    };
+}
+
+macro_rules! impl_numeric_lhs_aliased_atom_ops_for_all_ops {
+    ($($ty:ty),+ $(,)?) => {
+        impl_numeric_lhs_aliased_atom_ops!(Add, add, add_with_ws_into, $($ty),+);
+        impl_numeric_lhs_aliased_atom_ops!(Sub, sub, sub_with_ws_into, $($ty),+);
+        impl_numeric_lhs_aliased_atom_ops!(Mul, mul, mul_with_ws_into, $($ty),+);
+        impl_numeric_lhs_aliased_atom_ops!(Div, div, div_with_ws_into, $($ty),+);
     };
 }
 
@@ -305,6 +534,10 @@ impl_numeric_lhs_symbol_ops_for_all_ops!(
 );
 
 impl_numeric_lhs_atom_ops_for_all_ops!(
+    i8, i16, i32, i64, i128, isize, u8, u16, u32, u64, u128, usize, f64,
+);
+
+impl_numeric_lhs_aliased_atom_ops_for_all_ops!(
     i8, i16, i32, i64, i128, isize, u8, u16, u32, u64, u128, usize, f64,
 );
 

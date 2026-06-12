@@ -38,6 +38,7 @@
 //! let p = parse!("f(2,3) + 1/4");
 //! assert_eq!(expr, p);
 //! ```
+mod alias;
 mod coefficient;
 mod core;
 pub mod representation;
@@ -70,6 +71,7 @@ use std::{
     sync::OnceLock,
 };
 
+pub use self::alias::{AliasedAtom, AliasedAtomPrinter};
 pub use self::core::AtomCore;
 pub use self::representation::{
     Add, AddView, Fun, InlineNum, InlineVar, KeyLookup, ListIterator, ListSlice, Mul, MulView, Num,

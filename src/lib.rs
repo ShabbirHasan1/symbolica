@@ -96,8 +96,8 @@ pub mod prelude {
     };
 
     pub use crate::atom::{
-        Atom, AtomCore, AtomOrView, AtomType, AtomView, EvaluationError, EvaluationInfo,
-        FunctionArgument, FunctionBuilder, Indeterminate, InlineNum, InlineVar,
+        AliasedAtom, Atom, AtomCore, AtomOrView, AtomType, AtomView, EvaluationError,
+        EvaluationInfo, FunctionArgument, FunctionBuilder, Indeterminate, InlineNum, InlineVar,
         PolynomialConversionError, SeriesError, Symbol, TensorCanonicalizationError, UserData,
         UserDataKey,
     };
