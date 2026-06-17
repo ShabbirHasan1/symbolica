@@ -53,6 +53,12 @@ pub type BorrowedRawAtom = [u8];
 /// A raw atom that does not have explicit variant information.
 pub type RawAtom = Vec<u8>;
 
+impl Borrow<BorrowedRawAtom> for &Atom {
+    fn borrow(&self) -> &BorrowedRawAtom {
+        self.as_view().get_data()
+    }
+}
+
 impl Borrow<BorrowedRawAtom> for Atom {
     fn borrow(&self) -> &BorrowedRawAtom {
         self.as_view().get_data()

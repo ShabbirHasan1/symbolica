@@ -6,6 +6,7 @@ use ahash::{HashMap, HashSet};
 use rayon::ThreadPool;
 
 use crate::{
+    OperationCount,
     atom::{
         AddView, AliasedAtom, AtomType, FunctionBuilder, Indeterminate, KeyLookup, MulView,
         NumView, VarView, representation::FunView,
@@ -2056,6 +2057,38 @@ pub trait AtomCore: private::Sealed + Sized {
             AtomView::Num(_) | AtomView::Var(_) => ListSlice::empty().iter(),
         }
     }
+
+    /// Return the estimated number of operations needed to evaluate the atom.
+    fn count_operations(&self) -> OperationCount {
+        let mut count = OperationCount::default();
+
+        let mut counter = |a: AtomView<'_>| match a {
+            AtomView::Mul(m) => {
+                count.multiplications += m.get_nargs() - 1;
+                true
+            }
+            AtomView::Add(a) => {
+                count.additions += a.get_nargs() - 1;
+                true
+            }
+            AtomView::Pow(p) => {
+                if let Ok(i) = isize::try_from(p.get_exp()) {
+                    count.add_integer_power(i as i64);
+                } else {
+                    count.function_calls += 1;
+                }
+                true
+            }
+            AtomView::Fun(_) => {
+                count.function_calls += 1;
+                true
+            }
+            _ => true,
+        };
+
+        self.visitor(&mut counter);
+        count
+    }
 }
 
 impl AtomCore for InlineVar {
@@ -2153,6 +2186,48 @@ impl AtomCore for AliasedAtom {
         f: impl FnMut(AtomView, usize, usize) -> Option<Atom>,
     ) -> AliasedAtom {
         self.clone().alias_subexpressions(f)
+    }
+
+    fn evaluator<A: AtomCore>(&self, params: &[A]) -> EvaluatorBuilder<'_> {
+        EvaluatorBuilder::new(self.root.as_atom_view(), params)
+            .add_aliases(self.aliases.iter().map(|(a, b)| (a.clone(), b.clone())))
+            .unwrap()
+    }
+
+    fn count_operations(&self) -> OperationCount {
+        let mut count = OperationCount::default();
+
+        let mut counter = |a: AtomView<'_>| match a {
+            AtomView::Mul(m) => {
+                count.multiplications += m.get_nargs() - 1;
+                true
+            }
+            AtomView::Add(a) => {
+                count.additions += a.get_nargs() - 1;
+                true
+            }
+            AtomView::Pow(p) => {
+                if let Ok(i) = isize::try_from(p.get_exp()) {
+                    count.add_integer_power(i as i64);
+                } else {
+                    count.add_function_call();
+                }
+                true
+            }
+            AtomView::Fun(_) => {
+                count.function_calls += 1;
+                true
+            }
+            _ => true,
+        };
+
+        self.root.visitor(&mut counter);
+
+        for x in self.aliases.values() {
+            x.visitor(&mut counter);
+        }
+
+        count
     }
 }
 

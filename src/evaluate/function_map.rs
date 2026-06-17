@@ -209,6 +209,15 @@ impl<'a> EvaluatorBuilder<'a> {
         }
     }
 
+    pub(crate) fn new_multiple_views<A: AtomCore>(exprs: &[AtomView<'a>], params: &[A]) -> Self {
+        Self {
+            exprs: exprs.to_vec(),
+            fn_map: FunctionMap::new(),
+            params: params.iter().map(|p| p.as_atom_view().to_owned()).collect(),
+            optimization_settings: OptimizationSettings::default(),
+        }
+    }
+
     pub(crate) fn new_multiple<E: AtomCore, A: AtomCore>(exprs: &'a [E], params: &[A]) -> Self {
         Self {
             exprs: exprs.iter().map(|e| e.as_atom_view()).collect(),
