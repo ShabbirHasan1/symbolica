@@ -1422,6 +1422,10 @@ impl PythonPolynomial {
     /// Approximate all complex roots of a univariate polynomial, given a maximal number of iterations
     /// and a given tolerance. Returns the roots and their multiplicity.
     ///
+    /// Computes using double-precision floating-point arithmetic unless `decimal_digit_precision`
+    /// is provided, in which case it uses arbitrary precision and returns roots as
+    /// `(real, imaginary)` Decimal pairs.
+    ///
     /// Examples
     /// --------
     ///
@@ -1429,18 +1433,27 @@ impl PythonPolynomial {
     /// >>> for (r, m) in p.approximate_roots(1000, 1e-10):
     /// >>>     print(r, m)
     ///
+    /// >>> p = E('x^2-2').to_polynomial()
+    /// >>> for ((r, i), m) in p.approximate_roots(1000, 1e-10, 100):
+    /// >>>     print(r, i, m)
+    ///
     /// Parameters
     /// ----------
     /// max_iterations: int
     ///     The maximum number of iterations for the root finder.
     /// tolerance: float
     ///     The convergence tolerance for the root finder.
-    pub fn approximate_roots<'py>(
+    /// decimal_digit_precision: int | None
+    ///     The decimal precision of the numerical type used for root finding.
+    #[pyo3(signature = (max_iterations, tolerance, decimal_digit_precision = None))]
+    #[gen_stub(override_return_type(type_repr = "list[tuple[complex, int]] | list[tuple[tuple[decimal.Decimal, decimal.Decimal], int]]", imports = ("decimal")))]
+    pub fn approximate_roots(
         &self,
         max_iterations: usize,
         tolerance: f64,
-        py: Python<'py>,
-    ) -> PyResult<Vec<(Bound<'py, PyComplex>, usize)>> {
+        decimal_digit_precision: Option<u32>,
+        py: Python,
+    ) -> PyResult<Py<PyAny>> {
         let var = if self.poly.nvars() == 1 {
             0
         } else {
@@ -1458,12 +1471,27 @@ impl PythonPolynomial {
 
         let uni = self.poly.to_univariate_from_univariate(var);
 
-        Ok(uni
-            .approximate_roots::<F64>(max_iterations, &tolerance.into())
+        let Some(decimal_digit_precision) = decimal_digit_precision else {
+            let roots: Vec<_> = uni
+                .approximate_roots::<F64>(max_iterations, &tolerance.into())
+                .unwrap_or_else(|e| e)
+                .into_iter()
+                .map(|(r, p)| (PyComplex::from_doubles(py, r.re.to_f64(), r.im.to_f64()), p))
+                .collect();
+
+            return roots.into_py_any(py);
+        };
+
+        let prec = (decimal_digit_precision as f64 * std::f64::consts::LOG2_10).ceil() as u32;
+        let tolerance = Float::with_val(prec, tolerance);
+
+        uni
+            .approximate_roots::<Float>(max_iterations, &tolerance)
             .unwrap_or_else(|e| e)
             .into_iter()
-            .map(|(r, p)| (PyComplex::from_doubles(py, r.re.to_f64(), r.im.to_f64()), p))
-            .collect())
+            .map(|(r, p)| ((r.re.into(), r.im.into()), p))
+            .collect::<Vec<((PythonMultiPrecisionFloat, PythonMultiPrecisionFloat), usize)>>()
+            .into_py_any(py)
     }
 
     /// Convert the coefficients of the polynomial to a finite field with prime `prime`.
