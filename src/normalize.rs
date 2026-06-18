@@ -726,11 +726,15 @@ impl AtomView<'_> {
                                     }
 
                                     if !n.is_one() {
+                                        if cur_len > 0 {
+                                            // two factors created a number, e.g. 2^(1/2)*2^(1/2) = 2
+                                            // we need a second pass to normalize the multiplication
+                                            second_pass = true;
+                                        }
+
                                         out_mul.set_has_coefficient(true);
                                         out_mul.extend(v);
                                         cur_len += 1;
-                                    } else {
-                                        out_mul.set_has_coefficient(false);
                                     }
                                 } else {
                                     out_mul.extend(v);
@@ -755,7 +759,6 @@ impl AtomView<'_> {
                             return;
                         }
 
-                        // TODO: should not be reached anymore!
                         let v = last_buf.as_view();
                         if let AtomView::Num(n) = v {
                             if matches!(
@@ -774,6 +777,14 @@ impl AtomView<'_> {
                             if !n.is_one() {
                                 out_mul.extend(v);
                                 out_mul.set_has_coefficient(true);
+
+                                if cur_len > 0 {
+                                    // number created during the merge of two factors, e.g. 2^(1/2)*2^(1/2) = 2
+                                    out.as_view().normalize(workspace, &mut tmp);
+                                    out.set_from_view(&tmp.as_view());
+                                    return;
+                                }
+
                                 out_mul.set_normalized(true);
                             } else if cur_len == 1 {
                                 // downgrade
