@@ -43,15 +43,13 @@
 //! assert_eq!(gb.system, res);
 //! ```
 
-use std::{cmp::Ordering, rc::Rc};
+use std::{any::TypeId, cmp::Ordering, rc::Rc};
 
 use ahash::HashMap;
 
 use crate::domains::{
-    Field, Ring, RingOps, Set,
-    algebraic_number::AlgebraicExtension,
-    finite_field::{FiniteField, FiniteFieldCore, Mersenne64, Z2, Zp, Zp64},
-    rational::RationalField,
+    Field, Set,
+    finite_field::{FiniteFieldCore, Zp},
 };
 
 use super::{Exponent, MonomialOrder, polynomial::MultivariatePolynomial};
@@ -188,6 +186,7 @@ impl<R: Field + Echelonize, E: Exponent, O: MonomialOrder> GroebnerBasis<R, E, O
         }
 
         let mut matrix = vec![];
+        let mut zp_matrix = vec![];
 
         let mut all_monomials: HashMap<Vec<E>, MonomialData> = HashMap::default();
         let mut current_monomials = vec![];
@@ -197,6 +196,7 @@ impl<R: Field + Echelonize, E: Exponent, O: MonomialOrder> GroebnerBasis<R, E, O
         let mut selected_polys = vec![];
 
         let mut buffer = vec![];
+        let mut zp_buffer = vec![];
         let mut pivots: Vec<Option<usize>> = vec![];
 
         let mut iter_count = 1;
@@ -350,13 +350,15 @@ impl<R: Field + Echelonize, E: Exponent, O: MonomialOrder> GroebnerBasis<R, E, O
                     .column = column;
             }
 
-            R::echelonize(
+            echelonize(
                 &mut matrix,
+                &mut zp_matrix,
                 &mut selected_polys,
                 &all_monomials,
                 &sorted_monomial_indices,
                 &field,
                 &mut buffer,
+                &mut zp_buffer,
                 &mut pivots,
                 self.print_stats,
             );
@@ -371,7 +373,7 @@ impl<R: Field + Echelonize, E: Exponent, O: MonomialOrder> GroebnerBasis<R, E, O
                 for (coeff, col) in m.iter().rev() {
                     let index = sorted_monomial_indices[*col];
                     let exp = &current_monomials[index * nvars..(index + 1) * nvars];
-                    poly.append_monomial(field.from_larger(coeff), exp);
+                    poly.append_monomial(coeff.clone(), exp);
                 }
 
                 let poly = Rc::new(poly);
@@ -625,376 +627,384 @@ impl<R: Field, E: Exponent, O: MonomialOrder> GroebnerBasis<R, E, O> {
     }
 }
 
-/// Echelonize a matrix with entries in the field.
-pub trait Echelonize: Field {
-    type LargerField;
+/// Marker for fields that can be echelonized by the F4 implementation.
+///
+/// All `'static` fields use the default sparse row reduction. `Zp` is detected
+/// at the call site and routed through a specialized 32-bit finite-field path.
+pub trait Echelonize: Field + 'static {}
 
-    fn from_larger(&self, element: &Self::LargerField) -> <Self as Set>::Element;
-    fn echelonize<E: Exponent, O: MonomialOrder>(
-        matrix: &mut Vec<Vec<(Self::LargerField, usize)>>,
-        selected_polys: &mut Vec<Rc<MultivariatePolynomial<Self, E, O>>>,
-        all_monomials: &HashMap<Vec<E>, MonomialData>,
-        sorted_monomial_indices: &[usize],
-        field: &Self,
-        buffer: &mut Vec<Self::LargerField>,
-        pivots: &mut Vec<Option<usize>>,
-        print_stats: bool,
-    );
-}
+impl<R: Field + 'static> Echelonize for R {}
 
-impl Echelonize for Zp {
-    type LargerField = i64;
-
-    /// Specialized 32-bit finite field echelonization based on
-    /// "A Compact Parallel Implementation of F4" by Monagan and Pearce.
-    fn echelonize<E: Exponent, O: MonomialOrder>(
-        matrix: &mut Vec<Vec<(i64, usize)>>,
-        selected_polys: &mut Vec<Rc<MultivariatePolynomial<Zp, E, O>>>,
-        all_monomials: &HashMap<Vec<E>, MonomialData>,
-        sorted_monomial_indices: &[usize],
-        field: &Zp,
-        buffer: &mut Vec<i64>,
-        pivots: &mut Vec<Option<usize>>,
-        print_stats: bool,
-    ) {
-        fn u32_inv(coeff: u32, prime: u32) -> u32 {
-            // extended Euclidean algorithm: a x + b p = gcd(x, p) = 1 or a x = 1 (mod p)
-            let mut u1: u32 = 1;
-            let mut u3 = coeff;
-            let mut v1: u32 = 0;
-            let mut v3 = prime;
-            let mut even_iter: bool = true;
-
-            while v3 != 0 {
-                let q = u3 / v3;
-                let t3 = u3 % v3;
-                let t1 = u1 + q * v1;
-                u1 = v1;
-                v1 = t1;
-                u3 = v3;
-                v3 = t3;
-                even_iter = !even_iter;
-            }
-
-            if even_iter { u1 } else { prime - u1 }
+fn echelonize<R: Echelonize, E: Exponent, O: MonomialOrder>(
+    matrix: &mut Vec<Vec<(R::Element, usize)>>,
+    zp_matrix: &mut Vec<Vec<(i64, usize)>>,
+    selected_polys: &mut Vec<Rc<MultivariatePolynomial<R, E, O>>>,
+    all_monomials: &HashMap<Vec<E>, MonomialData>,
+    sorted_monomial_indices: &[usize],
+    field: &R,
+    buffer: &mut Vec<R::Element>,
+    zp_buffer: &mut Vec<i64>,
+    pivots: &mut Vec<Option<usize>>,
+    print_stats: bool,
+) {
+    if TypeId::of::<R>() == TypeId::of::<Zp>() {
+        // SAFETY: the TypeId check above proves that `R` is exactly the `Zp`
+        // type alias, so the associated element and polynomial layouts match.
+        unsafe {
+            echelonize_zp(
+                &mut *(matrix as *mut Vec<Vec<(R::Element, usize)>>
+                    as *mut Vec<Vec<(<Zp as Set>::Element, usize)>>),
+                zp_matrix,
+                &mut *(selected_polys as *mut Vec<Rc<MultivariatePolynomial<R, E, O>>>
+                    as *mut Vec<Rc<MultivariatePolynomial<Zp, E, O>>>),
+                all_monomials,
+                sorted_monomial_indices,
+                &*(field as *const R as *const Zp),
+                zp_buffer,
+                pivots,
+                print_stats,
+            );
         }
-
-        matrix.resize(selected_polys.len(), vec![]);
-        for (row, p) in matrix.iter_mut().zip(selected_polys) {
-            row.clear();
-
-            for (coeff, exp) in p.coefficients.iter().zip(p.exponents_iter()).rev() {
-                row.push((
-                    field.from_element(coeff) as i64,
-                    all_monomials.get(exp).unwrap().column,
-                ));
-            }
-        }
-
-        // sort the matrix rows to sort the shortest and most reduced pivots on top
-        matrix.sort_unstable_by(|r1, r2| {
-            r1[0]
-                .1
-                .cmp(&r2[0].1)
-                .then(r1.len().cmp(&r2.len()))
-                .then_with(|| {
-                    for ((_, i1), (_, i2)) in r1.iter().zip(r2) {
-                        match i1.cmp(i2) {
-                            Ordering::Equal => {}
-                            x => {
-                                return x.reverse();
-                            }
-                        }
-                    }
-
-                    Ordering::Equal
-                })
-        });
-
-        // row-reduce the sparse matrix
-        for p in &mut *pivots {
-            *p = None;
-        }
-
-        buffer.resize(sorted_monomial_indices.len(), 0);
-        pivots.resize(sorted_monomial_indices.len(), None);
-
-        let p = field.get_prime() as i64;
-        let p2 = p * p;
-
-        let mut pc = 0;
-        for r in 0..matrix.len() {
-            // identify all pivots
-            if let Some((coeff, col)) = matrix[r].first_mut()
-                && pivots[*col].is_none()
-            {
-                pivots[*col] = Some(r);
-                pc += 1;
-
-                if *coeff != 1 {
-                    let inv_pivot = u32_inv(*coeff as u32, field.get_prime());
-
-                    for (coeff, _) in &mut matrix[r] {
-                        *coeff *= inv_pivot as i64;
-                        *coeff %= field.get_prime() as i64;
-                    }
-                }
-            }
-        }
-
-        if print_stats {
-            println!("\tPivots={}, rows to reduce={}", pc, matrix.len() - pc);
-        }
-
-        for r in 0..matrix.len() {
-            if matrix[r].is_empty() {
-                continue;
-            }
-
-            if let Some((coeff, col)) = matrix[r].first_mut()
-                && pivots[*col].is_none()
-            {
-                pivots[*col] = Some(r);
-
-                if *coeff != 1 {
-                    let inv_pivot = u32_inv(*coeff as u32, field.get_prime());
-
-                    for (coeff, _) in &mut matrix[r] {
-                        *coeff *= inv_pivot as i64;
-                        *coeff %= field.get_prime() as i64;
-                    }
-                }
-            }
-
-            // do not reduce pivots
-            if pivots.contains(&Some(r)) {
-                continue;
-            }
-
-            // copy row into the buffer
-            for (coeff, col) in &*matrix[r] {
-                buffer[*col] = *coeff;
-            }
-
-            for i in 0..buffer.len() {
-                if buffer[i] != 0 {
-                    buffer[i] %= p;
-                }
-
-                if buffer[i] == 0 {
-                    continue;
-                }
-
-                let Some(pivot_index) = pivots[i] else {
-                    // keep on reducing this new pivot
-                    continue;
-                };
-
-                let pivot = &matrix[pivot_index];
-                let c = buffer[i];
-
-                buffer[i] = 0;
-
-                let mut t;
-                let mut m;
-                for (coeff, col) in pivot.iter().skip(1) {
-                    t = buffer[*col];
-                    m = *coeff * c;
-
-                    if t >= m {
-                        t -= m;
-                    } else {
-                        t += p2 - m;
-                    }
-
-                    buffer[*col] = t;
-                }
-            }
-
-            matrix[r].clear();
-
-            for (col, coeff) in buffer.iter_mut().enumerate() {
-                if *coeff != 0 {
-                    matrix[r].push((*coeff, col));
-                    *coeff = 0;
-                }
-            }
-
-            if let Some((coeff, col)) = matrix[r].first() {
-                pivots[*col] = Some(r);
-
-                if *coeff != 1 {
-                    let inv_pivot = u32_inv(*coeff as u32, field.get_prime());
-
-                    for (coeff, _) in &mut matrix[r] {
-                        *coeff *= inv_pivot as i64;
-                        *coeff %= field.get_prime() as i64;
-                    }
-                }
-            }
-        }
-
-        // TODO: do back substitution
-        matrix.retain(|r| !r.is_empty());
-    }
-
-    fn from_larger(&self, element: &i64) -> <Self as Set>::Element {
-        self.to_element(*element as u32)
+    } else {
+        echelonize_default(
+            matrix,
+            selected_polys,
+            all_monomials,
+            sorted_monomial_indices,
+            field,
+            buffer,
+            pivots,
+            print_stats,
+        );
     }
 }
 
-macro_rules! echelonize_impl {
-    ($f: ty) => {
-        impl Echelonize for $f {
-            type LargerField = Self::Element;
+#[inline(never)]
+fn echelonize_default<R: Field, E: Exponent, O: MonomialOrder>(
+    matrix: &mut Vec<Vec<(R::Element, usize)>>,
+    selected_polys: &mut Vec<Rc<MultivariatePolynomial<R, E, O>>>,
+    all_monomials: &HashMap<Vec<E>, MonomialData>,
+    sorted_monomial_indices: &[usize],
+    field: &R,
+    buffer: &mut Vec<R::Element>,
+    pivots: &mut Vec<Option<usize>>,
+    print_stats: bool,
+) {
+    matrix.resize(selected_polys.len(), vec![]);
+    for (row, p) in matrix.iter_mut().zip(selected_polys) {
+        row.clear();
 
-            #[inline(never)]
-            fn echelonize<E: Exponent, O: MonomialOrder>(
-                matrix: &mut Vec<Vec<(Self::Element, usize)>>,
-                selected_polys: &mut Vec<Rc<MultivariatePolynomial<Self, E, O>>>,
-                all_monomials: &HashMap<Vec<E>, MonomialData>,
-                sorted_monomial_indices: &[usize],
-                field: &Self,
-                buffer: &mut Vec<Self::Element>,
-                pivots: &mut Vec<Option<usize>>,
-                print_stats: bool,
-            ) {
-                matrix.resize(selected_polys.len(), vec![]);
-                for (row, p) in matrix.iter_mut().zip(selected_polys) {
-                    row.clear();
+        for (coeff, exp) in p.coefficients.iter().zip(p.exponents_iter()).rev() {
+            row.push((coeff.clone(), all_monomials.get(exp).unwrap().column));
+        }
+    }
 
-                    for (coeff, exp) in p.coefficients.iter().zip(p.exponents_iter()).rev() {
-                        row.push((coeff.clone(), all_monomials.get(exp).unwrap().column));
-                    }
+    // Sort the matrix rows to put the shortest and most reduced pivots on top.
+    sort_matrix_rows(matrix);
+
+    for p in &mut *pivots {
+        *p = None;
+    }
+
+    buffer.resize(sorted_monomial_indices.len(), field.zero());
+    pivots.resize(sorted_monomial_indices.len(), None);
+
+    let mut pc = 0;
+    for r in 0..matrix.len() {
+        // identify all pivots
+        if let Some((coeff, col)) = matrix[r].first_mut()
+            && pivots[*col].is_none()
+        {
+            pivots[*col] = Some(r);
+            pc += 1;
+
+            if !field.is_one(coeff) {
+                let inv_pivot = field.inv(coeff);
+
+                for (coeff, _) in &mut matrix[r] {
+                    field.mul_assign(coeff, &inv_pivot);
                 }
-
-                // sort the matrix rows to sort the shortest and most reduced pivots on top
-                matrix.sort_unstable_by(|r1, r2| {
-                    r1[0]
-                        .1
-                        .cmp(&r2[0].1)
-                        .then(r1.len().cmp(&r2.len()))
-                        .then_with(|| {
-                            for ((_, i1), (_, i2)) in r1.iter().zip(r2) {
-                                match i1.cmp(i2) {
-                                    Ordering::Equal => {}
-                                    x => {
-                                        return x.reverse();
-                                    }
-                                }
-                            }
-
-                            Ordering::Equal
-                        })
-                });
-
-                for p in &mut *pivots {
-                    *p = None;
-                }
-
-                buffer.resize(sorted_monomial_indices.len(), field.zero());
-                pivots.resize(sorted_monomial_indices.len(), None);
-
-                let mut pc = 0;
-                for r in 0..matrix.len() {
-                    // identify all pivots
-                    if let Some((coeff, col)) = matrix[r].first_mut() {
-                        if pivots[*col].is_none() {
-                            pivots[*col] = Some(r);
-                            pc += 1;
-
-                            if field.is_one(coeff) {
-                                let inv_pivot = field.inv(coeff);
-
-                                for (coeff, _) in &mut matrix[r] {
-                                    field.mul_assign(coeff, &inv_pivot);
-                                }
-                            }
-                        }
-                    }
-                }
-
-                if print_stats {
-                    println!("\tPivots={}, rows to reduce={}", pc, matrix.len() - pc);
-                }
-
-                for r in 0..matrix.len() {
-                    if matrix[r].is_empty() {
-                        continue;
-                    }
-
-                    // do not reduce pivots
-                    if pivots.iter().any(|c| *c == Some(r)) {
-                        continue;
-                    }
-
-                    // copy row into the buffer
-                    for (coeff, col) in &*matrix[r] {
-                        buffer[*col] = coeff.clone();
-                    }
-
-                    for i in 0..buffer.len() {
-                        if field.is_zero(&buffer[i]) {
-                            continue;
-                        }
-
-                        let Some(pivot_index) = pivots[i] else {
-                            continue;
-                        };
-
-                        let pivot: &Vec<(Self::Element, usize)> = &matrix[pivot_index];
-                        let c = buffer[i].clone();
-
-                        buffer[i] = field.zero();
-
-                        for (coeff, col) in pivot.iter().skip(1) {
-                            field.sub_mul_assign(&mut buffer[*col], coeff, &c);
-                        }
-                    }
-
-                    matrix[r].clear();
-
-                    for (col, coeff) in buffer.iter_mut().enumerate() {
-                        if !field.is_zero(coeff) {
-                            matrix[r].push((coeff.clone(), col));
-                            *coeff = field.zero();
-                        }
-                    }
-
-                    if let Some((coeff, col)) = matrix[r].first() {
-                        pivots[*col] = Some(r);
-                        let inv_pivot = field.inv(coeff);
-
-                        for (coeff, _) in &mut matrix[r] {
-                            field.mul_assign(coeff, &inv_pivot);
-                        }
-                    }
-                }
-
-                matrix.retain(|r| !r.is_empty());
-            }
-
-            fn from_larger(&self, element: &Self::LargerField) -> <Self as Set>::Element {
-                element.clone()
             }
         }
-    };
+    }
+
+    if print_stats {
+        println!("\tPivots={}, rows to reduce={}", pc, matrix.len() - pc);
+    }
+
+    for r in 0..matrix.len() {
+        if matrix[r].is_empty() {
+            continue;
+        }
+
+        // do not reduce pivots
+        if pivots.contains(&Some(r)) {
+            continue;
+        }
+
+        // copy row into the buffer
+        for (coeff, col) in &*matrix[r] {
+            buffer[*col] = coeff.clone();
+        }
+
+        for i in 0..buffer.len() {
+            if field.is_zero(&buffer[i]) {
+                continue;
+            }
+
+            let Some(pivot_index) = pivots[i] else {
+                continue;
+            };
+
+            let pivot: &Vec<(R::Element, usize)> = &matrix[pivot_index];
+            let c = buffer[i].clone();
+
+            buffer[i] = field.zero();
+
+            for (coeff, col) in pivot.iter().skip(1) {
+                field.sub_mul_assign(&mut buffer[*col], coeff, &c);
+            }
+        }
+
+        matrix[r].clear();
+
+        for (col, coeff) in buffer.iter_mut().enumerate() {
+            if !field.is_zero(coeff) {
+                matrix[r].push((coeff.clone(), col));
+                *coeff = field.zero();
+            }
+        }
+
+        if let Some((coeff, col)) = matrix[r].first() {
+            pivots[*col] = Some(r);
+            let inv_pivot = field.inv(coeff);
+
+            for (coeff, _) in &mut matrix[r] {
+                field.mul_assign(coeff, &inv_pivot);
+            }
+        }
+    }
+
+    matrix.retain(|r| !r.is_empty());
 }
 
-echelonize_impl!(Zp64);
-echelonize_impl!(FiniteField<Mersenne64>);
-echelonize_impl!(RationalField);
-echelonize_impl!(Z2);
-echelonize_impl!(AlgebraicExtension<Zp>);
-echelonize_impl!(AlgebraicExtension<Zp64>);
-echelonize_impl!(AlgebraicExtension<Z2>);
-echelonize_impl!(AlgebraicExtension<RationalField>);
+/// Specialized 32-bit finite field echelonization based on
+/// "A Compact Parallel Implementation of F4" by Monagan and Pearce.
+fn echelonize_zp<E: Exponent, O: MonomialOrder>(
+    matrix: &mut Vec<Vec<(<Zp as Set>::Element, usize)>>,
+    integer_matrix: &mut Vec<Vec<(i64, usize)>>,
+    selected_polys: &mut Vec<Rc<MultivariatePolynomial<Zp, E, O>>>,
+    all_monomials: &HashMap<Vec<E>, MonomialData>,
+    sorted_monomial_indices: &[usize],
+    field: &Zp,
+    buffer: &mut Vec<i64>,
+    pivots: &mut Vec<Option<usize>>,
+    print_stats: bool,
+) {
+    integer_matrix.resize(selected_polys.len(), vec![]);
+    for (row, p) in integer_matrix.iter_mut().zip(selected_polys) {
+        row.clear();
+
+        for (coeff, exp) in p.coefficients.iter().zip(p.exponents_iter()).rev() {
+            row.push((
+                field.from_element(coeff) as i64,
+                all_monomials.get(exp).unwrap().column,
+            ));
+        }
+    }
+
+    // Sort the matrix rows to put the shortest and most reduced pivots on top.
+    sort_matrix_rows(integer_matrix);
+
+    // row-reduce the sparse matrix
+    for p in &mut *pivots {
+        *p = None;
+    }
+
+    buffer.resize(sorted_monomial_indices.len(), 0);
+    pivots.resize(sorted_monomial_indices.len(), None);
+
+    let p = field.get_prime() as i64;
+    let p2 = p * p;
+
+    let mut pc = 0;
+    for r in 0..integer_matrix.len() {
+        // identify all pivots
+        if let Some((coeff, col)) = integer_matrix[r].first_mut()
+            && pivots[*col].is_none()
+        {
+            pivots[*col] = Some(r);
+            pc += 1;
+
+            if *coeff != 1 {
+                let inv_pivot = u32_inv(*coeff as u32, field.get_prime());
+
+                for (coeff, _) in &mut integer_matrix[r] {
+                    *coeff *= inv_pivot as i64;
+                    *coeff %= field.get_prime() as i64;
+                }
+            }
+        }
+    }
+
+    if print_stats {
+        println!(
+            "\tPivots={}, rows to reduce={}",
+            pc,
+            integer_matrix.len() - pc
+        );
+    }
+
+    for r in 0..integer_matrix.len() {
+        if integer_matrix[r].is_empty() {
+            continue;
+        }
+
+        if let Some((coeff, col)) = integer_matrix[r].first_mut()
+            && pivots[*col].is_none()
+        {
+            pivots[*col] = Some(r);
+
+            if *coeff != 1 {
+                let inv_pivot = u32_inv(*coeff as u32, field.get_prime());
+
+                for (coeff, _) in &mut integer_matrix[r] {
+                    *coeff *= inv_pivot as i64;
+                    *coeff %= field.get_prime() as i64;
+                }
+            }
+        }
+
+        // do not reduce pivots
+        if pivots.contains(&Some(r)) {
+            continue;
+        }
+
+        // copy row into the buffer
+        for (coeff, col) in &*integer_matrix[r] {
+            buffer[*col] = *coeff;
+        }
+
+        for i in 0..buffer.len() {
+            if buffer[i] != 0 {
+                buffer[i] %= p;
+            }
+
+            if buffer[i] == 0 {
+                continue;
+            }
+
+            let Some(pivot_index) = pivots[i] else {
+                // keep on reducing this new pivot
+                continue;
+            };
+
+            let pivot = &integer_matrix[pivot_index];
+            let c = buffer[i];
+
+            buffer[i] = 0;
+
+            let mut t;
+            let mut m;
+            for (coeff, col) in pivot.iter().skip(1) {
+                t = buffer[*col];
+                m = *coeff * c;
+
+                if t >= m {
+                    t -= m;
+                } else {
+                    t += p2 - m;
+                }
+
+                buffer[*col] = t;
+            }
+        }
+
+        integer_matrix[r].clear();
+
+        for (col, coeff) in buffer.iter_mut().enumerate() {
+            if *coeff != 0 {
+                integer_matrix[r].push((*coeff, col));
+                *coeff = 0;
+            }
+        }
+
+        if let Some((coeff, col)) = integer_matrix[r].first() {
+            pivots[*col] = Some(r);
+
+            if *coeff != 1 {
+                let inv_pivot = u32_inv(*coeff as u32, field.get_prime());
+
+                for (coeff, _) in &mut integer_matrix[r] {
+                    *coeff *= inv_pivot as i64;
+                    *coeff %= field.get_prime() as i64;
+                }
+            }
+        }
+    }
+
+    // TODO: do back substitution
+    integer_matrix.retain(|r| !r.is_empty());
+
+    matrix.clear();
+    matrix.reserve(integer_matrix.len());
+    for row in integer_matrix {
+        matrix.push(
+            row.iter()
+                .map(|(coeff, col)| (field.to_element(*coeff as u32), *col))
+                .collect(),
+        );
+    }
+}
+
+fn sort_matrix_rows<C>(matrix: &mut [Vec<(C, usize)>]) {
+    matrix.sort_unstable_by(|r1, r2| {
+        r1[0]
+            .1
+            .cmp(&r2[0].1)
+            .then(r1.len().cmp(&r2.len()))
+            .then_with(|| {
+                for ((_, i1), (_, i2)) in r1.iter().zip(r2) {
+                    match i1.cmp(i2) {
+                        Ordering::Equal => {}
+                        x => {
+                            return x.reverse();
+                        }
+                    }
+                }
+
+                Ordering::Equal
+            })
+    });
+}
+
+fn u32_inv(coeff: u32, prime: u32) -> u32 {
+    // Extended Euclidean algorithm: a x + b p = gcd(x, p) = 1 or a x = 1 (mod p).
+    let mut u1: u32 = 1;
+    let mut u3 = coeff;
+    let mut v1: u32 = 0;
+    let mut v3 = prime;
+    let mut even_iter: bool = true;
+
+    while v3 != 0 {
+        let q = u3 / v3;
+        let t3 = u3 % v3;
+        let t1 = u1 + q * v1;
+        u1 = v1;
+        v1 = t1;
+        u3 = v3;
+        v3 = t3;
+        even_iter = !even_iter;
+    }
+
+    if even_iter { u1 } else { prime - u1 }
+}
 
 #[cfg(test)]
 mod test {
     use crate::{
         atom::AtomCore,
-        domains::finite_field::Zp,
+        domains::{finite_field::Zp, rational::Q},
         parse,
         poly::{GrevLexOrder, groebner::GroebnerBasis, polynomial::MultivariatePolynomial},
     };
@@ -1062,5 +1072,17 @@ mod test {
             .collect();
 
         assert_eq!(gb.system, res);
+    }
+
+    #[test]
+    fn rational_field_uses_default_echelonization() {
+        let ideal: Vec<MultivariatePolynomial<_, u16>> = ["x+y", "x-y"]
+            .iter()
+            .map(|x| parse!(x).expand().to_polynomial(&Q, None))
+            .collect();
+
+        let gb = GroebnerBasis::new(&ideal, false);
+
+        assert!(ideal.iter().all(|p| p.reduce(&gb.system).is_zero()));
     }
 }
